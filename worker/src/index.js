@@ -44,11 +44,14 @@ export default {
 
     // ---- Debug ----
     if (url.pathname === "/debug") {
+      const enrollments = JSON.parse(await env.FAMILY_DATA.get("teller_enrollments") || "[]");
       return json({
         client_id_set: !!env.GOOGLE_CLIENT_ID,
         secret_set: !!env.GOOGLE_CLIENT_SECRET,
         teller_app_id_set: !!env.TELLER_APP_ID,
         teller_cert_set: !!env.TELLER_CERT,
+        teller_enrollments_count: enrollments.length,
+        teller_enrollment_preview: enrollments.map(e => ({ hasToken: !!e.accessToken, tokenPrefix: e.accessToken?.slice(0,8) })),
       });
     }
 
@@ -75,42 +78,25 @@ async function handleTellerConnect(request, env) {
 // ================================================================
 async function handleGetAccounts(env) {
   const enrollments = JSON.parse(await env.FAMILY_DATA.get("teller_enrollments") || "[]");
-  if (enrollments.length === 0) return json({ accounts: [], connected: false });
 
   let accounts = [];
-  for (const enr of enrollments) {
+
+  if (enrollments.length > 0 && env.TELLER_PROXY_URL) {
     try {
-      const res = await fetch("https://api.teller.io/accounts", {
-        headers: { Authorization: `Basic ${btoa(enr.accessToken + ":")}` },
-        // @ts-ignore
-        cf: { mtlsClientCertificate: env.TELLER_CERT },
+      const res = await fetch(`${env.TELLER_PROXY_URL}/accounts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-proxy-secret": env.TELLER_PROXY_SECRET,
+        },
+        body: JSON.stringify({ enrollments }),
       });
-      if (!res.ok) continue;
-      const data = await res.json();
-
-      for (const acct of data) {
-        let balance = null;
-        try {
-          const bRes = await fetch(`https://api.teller.io/accounts/${acct.id}/balances`, {
-            headers: { Authorization: `Basic ${btoa(enr.accessToken + ":")}` },
-            // @ts-ignore
-            cf: { mtlsClientCertificate: env.TELLER_CERT },
-          });
-          if (bRes.ok) balance = await bRes.json();
-        } catch {}
-
-        accounts.push({
-          id: acct.id,
-          name: acct.name,
-          type: acct.type,
-          subtype: acct.subtype,
-          institution: acct.institution?.name || "Unknown",
-          balance: balance?.available ?? balance?.ledger ?? null,
-          currency: acct.currency || "USD",
-        });
+      if (res.ok) {
+        const data = await res.json();
+        accounts = data.accounts || [];
       }
     } catch (e) {
-      console.error("Teller accounts error:", e.message);
+      console.error("Proxy accounts error:", e.message);
     }
   }
 
@@ -130,39 +116,25 @@ async function handleGetTransactions(url, env) {
 
   let transactions = [];
 
-  for (const enr of enrollments) {
+  if (enrollments.length > 0 && env.TELLER_PROXY_URL) {
     try {
-      const acctRes = await fetch("https://api.teller.io/accounts", {
-        headers: { Authorization: `Basic ${btoa(enr.accessToken + ":")}` },
-        // @ts-ignore
-        cf: { mtlsClientCertificate: env.TELLER_CERT },
+      const res = await fetch(`${env.TELLER_PROXY_URL}/transactions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-proxy-secret": env.TELLER_PROXY_SECRET,
+        },
+        body: JSON.stringify({ enrollments, accountId }),
       });
-      if (!acctRes.ok) continue;
-      const accts = await acctRes.json();
-
-      for (const acct of accts) {
-        if (accountId && acct.id !== accountId) continue;
-        const txRes = await fetch(`https://api.teller.io/accounts/${acct.id}/transactions`, {
-          headers: { Authorization: `Basic ${btoa(enr.accessToken + ":")}` },
-          // @ts-ignore
-          cf: { mtlsClientCertificate: env.TELLER_CERT },
-        });
-        if (!txRes.ok) continue;
-        const txData = await txRes.json();
-        transactions = transactions.concat(txData.map(tx => ({
-          id: tx.id,
-          date: tx.date,
-          description: tx.description,
-          amount: parseFloat(tx.amount),
-          type: tx.type,
-          category: tx.details?.category || categorize(tx.description),
-          account: acct.name,
-          institution: acct.institution?.name || "Unknown",
-          status: tx.status,
-        })));
+      if (res.ok) {
+        const data = await res.json();
+        transactions = (data.transactions || []).map(tx => ({
+          ...tx,
+          category: tx.category || categorize(tx.description),
+        }));
       }
     } catch (e) {
-      console.error("Teller transactions error:", e.message);
+      console.error("Proxy transactions error:", e.message);
     }
   }
 
