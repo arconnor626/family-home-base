@@ -4,7 +4,8 @@
       "Bash(npm install *)",
       "Read(//c/Program Files/**)",
       "Read(//c/Users/arcon/AppData/Roaming/**)",
-      "Bash(npx wrangler *)"
+      "Bash(npx wrangler *)",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }

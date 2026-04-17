@@ -6,3 +6,7 @@ account_id = "16258ef4b752c10603abc80fceff061f"
 [[kv_namespaces]]
 binding = "FAMILY_DATA"
 id = "b563e882202243f2b503720617d727a6"
+
+[[mtls_certificates]]
+binding = "TELLER_CERT"
+certificate_id = "92b69536-800c-4604-8822-736e5187342a"

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Connor Family Hub</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.teller.io/connect/connect.js"></script>
 </head>
 <body>
   <header>
@@ -14,7 +15,7 @@
     </div>
     <nav>
       <button class="nav-btn active" data-section="schedule">Schedule</button>
-      <button class="nav-btn" data-section="budget">Budget</button>
+      <button class="nav-btn" data-section="budget">Finance</button>
     </nav>
   </header>
 
@@ -29,23 +30,170 @@
           <button id="next-week">&#8250;</button>
         </div>
       </div>
-
       <div class="calendar-grid" id="calendar-grid"></div>
-
       <div class="today-panel">
         <h3>Today's Events</h3>
         <div id="today-events" class="event-list"></div>
       </div>
     </section>
 
-    <!-- BUDGET SECTION -->
+    <!-- FINANCE SECTION -->
     <section id="budget" class="section">
       <div class="section-header">
-        <h2>Family Budget</h2>
+        <h2>Family Finances</h2>
+        <div class="header-actions">
+          <button class="btn-secondary" id="connect-bank-btn">+ Connect Bank</button>
+          <button class="btn-secondary" id="manual-entry-btn">+ Manual Entry</button>
+        </div>
       </div>
-      <p class="coming-soon">Budget tracking coming soon.</p>
+
+      <!-- Net Worth -->
+      <div class="finance-cards" id="account-cards">
+        <div class="finance-card placeholder">
+          <div class="card-label">Net Worth</div>
+          <div class="card-value" id="net-worth">—</div>
+        </div>
+        <div class="finance-card placeholder">
+          <div class="card-label">Total Assets</div>
+          <div class="card-value" id="total-assets">—</div>
+        </div>
+        <div class="finance-card placeholder">
+          <div class="card-label">Total Debt</div>
+          <div class="card-value" id="total-debt">—</div>
+        </div>
+        <div class="finance-card placeholder">
+          <div class="card-label">Monthly Spending</div>
+          <div class="card-value" id="monthly-spending">—</div>
+        </div>
+      </div>
+
+      <div class="finance-grid">
+        <!-- Spending by category -->
+        <div class="finance-panel">
+          <div class="panel-header">
+            <h3>Spending by Category</h3>
+            <select id="summary-months">
+              <option value="1">This month</option>
+              <option value="3" selected>Last 3 months</option>
+              <option value="6">Last 6 months</option>
+              <option value="12">Last year</option>
+            </select>
+          </div>
+          <div id="category-chart"></div>
+        </div>
+
+        <!-- Monthly trend -->
+        <div class="finance-panel">
+          <div class="panel-header">
+            <h3>Monthly Spending</h3>
+          </div>
+          <div id="monthly-chart"></div>
+        </div>
+
+        <!-- Tax estimate -->
+        <div class="finance-panel tax-panel">
+          <div class="panel-header">
+            <h3>Quarterly Tax Estimate</h3>
+          </div>
+          <div id="tax-estimate-display">
+            <div class="tax-row">
+              <span>Estimated Income (3 mo)</span>
+              <span id="tax-income">—</span>
+            </div>
+            <div class="tax-row">
+              <span>Est. Tax Owed (25%)</span>
+              <span id="tax-owed" class="tax-highlight">—</span>
+            </div>
+            <p class="tax-note">Based on connected accounts. Consult a tax professional for accuracy.</p>
+          </div>
+        </div>
+
+        <!-- Budget goals -->
+        <div class="finance-panel">
+          <div class="panel-header">
+            <h3>Budget Goals</h3>
+            <button class="btn-small" id="add-goal-btn">+ Add Goal</button>
+          </div>
+          <div id="goals-list"></div>
+        </div>
+      </div>
+
+      <!-- Transactions -->
+      <div class="finance-panel" style="margin-top:24px">
+        <div class="panel-header">
+          <h3>Transactions</h3>
+          <div class="tx-filters">
+            <input type="text" id="tx-search" placeholder="Search..." />
+            <select id="tx-category-filter"><option value="">All categories</option></select>
+          </div>
+        </div>
+        <div id="transactions-list"></div>
+      </div>
+
+      <!-- Accounts list -->
+      <div class="finance-panel" style="margin-top:24px">
+        <div class="panel-header"><h3>Accounts</h3></div>
+        <div id="accounts-list"></div>
+      </div>
     </section>
   </main>
+
+  <!-- MODALS -->
+  <div class="modal-overlay" id="modal-overlay">
+    <!-- Goal modal -->
+    <div class="modal" id="goal-modal">
+      <h3>Add Budget Goal</h3>
+      <label>Goal name<input type="text" id="goal-name" placeholder="e.g. Vacation Fund" /></label>
+      <label>Target amount<input type="number" id="goal-amount" placeholder="5000" /></label>
+      <label>Category (optional)<input type="text" id="goal-category" placeholder="e.g. Travel" /></label>
+      <label>Target date (optional)<input type="date" id="goal-date" /></label>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="goal-cancel">Cancel</button>
+        <button class="btn-primary" id="goal-save">Save Goal</button>
+      </div>
+    </div>
+
+    <!-- Manual entry modal -->
+    <div class="modal" id="manual-modal">
+      <h3>Manual Entry</h3>
+      <div class="toggle-row">
+        <button class="toggle-btn active" data-type="transaction">Transaction</button>
+        <button class="toggle-btn" data-type="account">Account Balance</button>
+      </div>
+
+      <div id="manual-transaction-form">
+        <label>Date<input type="date" id="manual-date" /></label>
+        <label>Description<input type="text" id="manual-desc" placeholder="e.g. Grocery store" /></label>
+        <label>Amount<input type="number" id="manual-amount" placeholder="50.00" step="0.01" /></label>
+        <label>Type
+          <select id="manual-type">
+            <option value="debit">Expense (debit)</option>
+            <option value="credit">Income (credit)</option>
+          </select>
+        </label>
+        <label>Category<input type="text" id="manual-category" placeholder="Auto-detected if blank" /></label>
+      </div>
+
+      <div id="manual-account-form" style="display:none">
+        <label>Account name<input type="text" id="manual-acct-name" placeholder="e.g. TSP Retirement" /></label>
+        <label>Institution<input type="text" id="manual-acct-inst" placeholder="e.g. Thrift Savings Plan" /></label>
+        <label>Balance<input type="number" id="manual-acct-balance" placeholder="50000.00" step="0.01" /></label>
+        <label>Type
+          <select id="manual-acct-type">
+            <option value="depository">Checking/Savings</option>
+            <option value="investment">Investment/Retirement</option>
+            <option value="credit">Credit Card</option>
+            <option value="loan">Loan/Mortgage</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" id="manual-cancel">Cancel</button>
+        <button class="btn-primary" id="manual-save">Save</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
