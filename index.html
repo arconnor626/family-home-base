@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connor Family Hub</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>Connor Family Hub</h1>
+      <span id="current-date"></span>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-section="schedule">Schedule</button>
+      <button class="nav-btn" data-section="budget">Budget</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- SCHEDULE SECTION -->
+    <section id="schedule" class="section active">
+      <div class="section-header">
+        <h2>Family Schedule</h2>
+        <div class="week-nav">
+          <button id="prev-week">&#8249;</button>
+          <span id="week-label"></span>
+          <button id="next-week">&#8250;</button>
+        </div>
+      </div>
+
+      <div class="calendar-grid" id="calendar-grid"></div>
+
+      <div class="today-panel">
+        <h3>Today's Events</h3>
+        <div id="today-events" class="event-list"></div>
+      </div>
+    </section>
+
+    <!-- BUDGET SECTION -->
+    <section id="budget" class="section">
+      <div class="section-header">
+        <h2>Family Budget</h2>
+      </div>
+      <p class="coming-soon">Budget tracking coming soon.</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
