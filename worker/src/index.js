@@ -50,6 +50,8 @@ export default {
         secret_set: !!env.GOOGLE_CLIENT_SECRET,
         teller_app_id_set: !!env.TELLER_APP_ID,
         teller_cert_set: !!env.TELLER_CERT,
+        teller_proxy_url: env.TELLER_PROXY_URL || null,
+        teller_proxy_secret_set: !!env.TELLER_PROXY_SECRET,
         teller_enrollments_count: enrollments.length,
         teller_enrollment_preview: enrollments.map(e => ({ hasToken: !!e.accessToken, tokenPrefix: e.accessToken?.slice(0,8) })),
       });
