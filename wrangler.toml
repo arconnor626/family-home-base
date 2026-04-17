@@ -1,0 +1,8 @@
+name = "family-home-base"
+main = "worker/src/index.js"
+compatibility_date = "2025-01-01"
+account_id = "16258ef4b752c10603abc80fceff061f"
+
+[[kv_namespaces]]
+binding = "FAMILY_DATA"
+id = "b563e882202243f2b503720617d727a6"
