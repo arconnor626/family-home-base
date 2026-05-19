@@ -28,7 +28,7 @@ secure backend and access control to it.
 
 ## Current phase
 
-**Phase 4 — COMPLETE.** Dashboard, Tasks, Projects, Budget Categories, and Pass-on Notes are live.
+**Phase 5 — COMPLETE.** Google Calendar OAuth2 sync and CSV transaction import are live.
 
 ## Deployed URLs
 
@@ -53,6 +53,9 @@ secure backend and access control to it.
 - Worker task routes: `GET/POST /tasks`, `PUT/DELETE /tasks/:id`
 - Worker project routes: `GET/POST /projects`, `PUT/DELETE /projects/:id`
 - Worker note routes: `GET/POST /notes`, `DELETE /notes/:id`
+- Worker integration routes: `GET /integrations/google/auth`, `GET /integrations/google/callback`,
+  `GET /integrations/google/status`, `POST /integrations/google/sync`,
+  `DELETE /integrations/google/disconnect`
 - Worker admin routes (admin role only): `GET/POST /admin/users`,
   `PUT/DELETE /admin/users/:username`
 - PBKDF2 password hashing (100k iterations, SHA-256), 7-day KV-backed sessions
@@ -60,8 +63,17 @@ secure backend and access control to it.
 
 ## Exact next action
 
-Begin **Phase 5** — integrations (Google Calendar sync, bank/transaction imports, etc.).
-Read `PROJECT_PLAN.md` for scope. Re-read `DECISIONS.md` before starting.
+Begin **Phase 6** — Records integration (document storage + AI/natural-language search).
+Read `PROJECT_PLAN.md` for scope. Re-read `DECISIONS.md` (especially D16) before starting.
+
+**One required setup step before Google Calendar sync will work:**
+Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` as Worker secrets:
+```
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+```
+The redirect URI to register in Google Cloud Console:
+`https://connor-family-hub.arconnor626.workers.dev/integrations/google/callback`
 
 To redeploy after changes:
 - **Worker:** `wrangler deploy` from `worker/`
