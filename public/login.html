@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connor Family Hub — Sign In</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <h1>Connor Family Hub</h1>
+      <p class="subtitle">Sign in to continue</p>
+
+      <form id="login-form" novalidate>
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username"
+                 autocomplete="username" autocapitalize="none"
+                 spellcheck="false" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password"
+                 autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-primary" id="submit-btn">Sign in</button>
+        <p class="error-msg" id="error-msg" role="alert" aria-live="polite"></p>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { login, checkSession } from '/js/auth.js';
+
+    // Already logged in? Skip straight to the app.
+    checkSession().then(user => {
+      if (user) window.location.href = '/index.html';
+    });
+
+    const form = document.getElementById('login-form');
+    const errorMsg = document.getElementById('error-msg');
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      errorMsg.textContent = '';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing in…';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        await login(username, password);
+        window.location.href = '/index.html';
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign in';
+        document.getElementById('password').value = '';
+      }
+    });
+  </script>
+</body>
+</html>

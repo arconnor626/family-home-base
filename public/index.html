@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connor Family Hub</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <span class="logo">Connor Family Hub</span>
+    <div class="user-info">
+      <span>Signed in as <strong id="user-name">…</strong></span>
+      <button class="btn-logout" id="logout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <div class="placeholder-card">
+      <h2>You're in.</h2>
+      <p>Phase 1 complete — authentication is working.<br>
+         Schedule and Finance views arrive in Phase 2.</p>
+    </div>
+  </main>
+
+  <script type="module">
+    import { requireAuth, logout } from '/js/auth.js';
+
+    const user = await requireAuth();
+    if (!user) return; // requireAuth redirects to login
+
+    document.getElementById('user-name').textContent = user.name;
+    document.getElementById('logout-btn').addEventListener('click', logout);
+  </script>
+</body>
+</html>

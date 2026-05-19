@@ -1,0 +1,26 @@
+# Cloudflare Worker configuration for the Connor Family Hub backend.
+#
+# PLACEHOLDERS marked TODO must be filled in during Cloudflare setup.
+# See docs/SETUP.md for step-by-step instructions.
+
+name = "connor-family-hub"
+main = "src/index.js"
+compatibility_date = "2026-05-19"
+
+# --- KV namespace binding ---------------------------------------------------
+# Create the namespace with:  wrangler kv namespace create FAMILY_HUB_KV
+# Then paste the returned id below, replacing TODO.
+[[kv_namespaces]]
+binding = "FAMILY_HUB_KV"
+id = "33a7160b8d84400c87051ce1ebbaf75e"
+
+# --- Local development ------------------------------------------------------
+# `wrangler dev` runs the Worker locally. A local KV simulation is used
+# automatically; no production data is touched.
+[dev]
+port = 8787
+
+# --- Notes ------------------------------------------------------------------
+# Secrets (e.g. a session-signing key, future OAuth credentials) are NOT stored
+# in this file. They are set with:  wrangler secret put <NAME>
+# This keeps them out of version control.
