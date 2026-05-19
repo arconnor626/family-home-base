@@ -1,36 +1,197 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Connor Family Hub</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <header class="app-header">
-    <span class="logo">Connor Family Hub</span>
-    <div class="user-info">
-      <span>Signed in as <strong id="user-name">…</strong></span>
-      <button class="btn-logout" id="logout-btn">Sign out</button>
+    <div class="header-left">
+      <span class="logo">Connor Family Hub</span>
+      <span id="current-date"></span>
+    </div>
+    <nav class="app-nav">
+      <button class="nav-btn active" data-section="schedule">Schedule</button>
+      <button class="nav-btn" data-section="finance">Finance</button>
+    </nav>
+    <div class="header-right">
+      <span id="user-greeting"></span>
+      <button id="logout-btn" class="btn-secondary btn-sm">Sign out</button>
     </div>
   </header>
 
-  <main class="app-main">
-    <div class="placeholder-card">
-      <h2>You're in.</h2>
-      <p>Phase 1 complete — authentication is working.<br>
-         Schedule and Finance views arrive in Phase 2.</p>
-    </div>
+  <main>
+
+    <!-- ── SCHEDULE ─────────────────────────────────────────────── -->
+    <section id="schedule" class="section active">
+      <div class="section-header">
+        <h2>Family Schedule</h2>
+        <div class="header-actions">
+          <div class="week-nav">
+            <button id="prev-week">&#8249;</button>
+            <span id="week-label"></span>
+            <button id="next-week">&#8250;</button>
+          </div>
+          <button class="btn-primary btn-sm" id="add-event-btn">+ Add Event</button>
+        </div>
+      </div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+      <div class="today-panel">
+        <h3>Today's Events</h3>
+        <div id="today-events" class="event-list"></div>
+      </div>
+    </section>
+
+    <!-- ── FINANCE ───────────────────────────────────────────────── -->
+    <section id="finance" class="section">
+      <div class="section-header">
+        <h2>Family Finances</h2>
+        <div class="header-actions">
+          <button class="btn-secondary btn-sm" id="manual-entry-btn">+ Manual Entry</button>
+        </div>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="finance-cards">
+        <div class="finance-card">
+          <div class="card-label">Net Worth</div>
+          <div class="card-value" id="net-worth">—</div>
+        </div>
+        <div class="finance-card">
+          <div class="card-label">Total Assets</div>
+          <div class="card-value" id="total-assets">—</div>
+        </div>
+        <div class="finance-card">
+          <div class="card-label">Total Debt</div>
+          <div class="card-value" id="total-debt">—</div>
+        </div>
+        <div class="finance-card">
+          <div class="card-label">Monthly Spending</div>
+          <div class="card-value" id="monthly-spending">—</div>
+        </div>
+      </div>
+
+      <div class="finance-grid">
+        <!-- Tax estimate -->
+        <div class="finance-panel">
+          <div class="panel-header"><h3>Quarterly Tax Estimate</h3></div>
+          <div class="tax-rows">
+            <div class="tax-row"><span>Estimated Income (3 mo)</span><span id="tax-income">—</span></div>
+            <div class="tax-row highlight"><span>Est. Tax Owed (25%)</span><span id="tax-owed">—</span></div>
+          </div>
+          <p class="tax-note">Consult a tax professional for accuracy.</p>
+        </div>
+
+        <!-- Budget goals -->
+        <div class="finance-panel">
+          <div class="panel-header">
+            <h3>Budget Goals</h3>
+            <button class="btn-sm btn-secondary" id="add-goal-btn">+ Add Goal</button>
+          </div>
+          <div id="goals-list"><p class="empty-msg">No goals yet.</p></div>
+        </div>
+      </div>
+
+      <!-- Transactions -->
+      <div class="finance-panel" style="margin-top:24px">
+        <div class="panel-header">
+          <h3>Transactions</h3>
+          <div class="tx-filters">
+            <input type="text" id="tx-search" placeholder="Search…" />
+            <select id="tx-category-filter"><option value="">All categories</option></select>
+          </div>
+        </div>
+        <div id="transactions-list"><p class="empty-msg">No transactions yet.</p></div>
+      </div>
+
+      <!-- Accounts -->
+      <div class="finance-panel" style="margin-top:24px">
+        <div class="panel-header"><h3>Accounts</h3></div>
+        <div id="accounts-list"><p class="empty-msg">No accounts yet.</p></div>
+      </div>
+    </section>
+
   </main>
 
-  <script type="module">
-    import { requireAuth, logout } from '/js/auth.js';
+  <!-- ── MODALS ────────────────────────────────────────────────────── -->
+  <div class="modal-overlay hidden" id="modal-overlay">
 
-    const user = await requireAuth();
-    if (!user) return; // requireAuth redirects to login
+    <!-- Add / Edit Event -->
+    <div class="modal hidden" id="event-modal">
+      <h3 id="event-modal-title">Add Event</h3>
+      <label>Title <input type="text" id="event-title" placeholder="e.g. Doctor appointment" /></label>
+      <label>Date <input type="date" id="event-date" /></label>
+      <label class="checkbox-label"><input type="checkbox" id="event-allday" checked /> All day</label>
+      <div id="event-time-fields" class="hidden">
+        <label>Start time <input type="time" id="event-time" /></label>
+        <label>End time <input type="time" id="event-end-time" /></label>
+      </div>
+      <label>Description <input type="text" id="event-description" placeholder="Optional" /></label>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="event-cancel">Cancel</button>
+        <button class="btn-primary" id="event-save">Save</button>
+      </div>
+    </div>
 
-    document.getElementById('user-name').textContent = user.name;
-    document.getElementById('logout-btn').addEventListener('click', logout);
-  </script>
+    <!-- Add Goal -->
+    <div class="modal hidden" id="goal-modal">
+      <h3>Add Budget Goal</h3>
+      <label>Goal name <input type="text" id="goal-name" placeholder="e.g. Vacation Fund" /></label>
+      <label>Target amount <input type="number" id="goal-target" placeholder="5000" min="0" /></label>
+      <label>Current amount <input type="number" id="goal-current" placeholder="0" min="0" /></label>
+      <label>Category <input type="text" id="goal-category" placeholder="e.g. Travel (optional)" /></label>
+      <label>Target date <input type="date" id="goal-date" /></label>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="goal-cancel">Cancel</button>
+        <button class="btn-primary" id="goal-save">Save Goal</button>
+      </div>
+    </div>
+
+    <!-- Manual Entry -->
+    <div class="modal hidden" id="manual-modal">
+      <h3>Manual Entry</h3>
+      <div class="toggle-row">
+        <button class="toggle-btn active" data-type="transaction">Transaction</button>
+        <button class="toggle-btn" data-type="account">Account Balance</button>
+      </div>
+
+      <div id="manual-tx-fields">
+        <label>Date <input type="date" id="manual-date" /></label>
+        <label>Description <input type="text" id="manual-desc" placeholder="e.g. Grocery store" /></label>
+        <label>Amount <input type="number" id="manual-amount" placeholder="50.00" step="0.01" min="0" /></label>
+        <label>Type
+          <select id="manual-type">
+            <option value="debit">Expense (debit)</option>
+            <option value="credit">Income (credit)</option>
+          </select>
+        </label>
+        <label>Category <input type="text" id="manual-category" placeholder="e.g. Groceries" /></label>
+      </div>
+
+      <div id="manual-acct-fields" class="hidden">
+        <label>Account name <input type="text" id="manual-acct-name" placeholder="e.g. TSP Retirement" /></label>
+        <label>Institution <input type="text" id="manual-acct-inst" placeholder="e.g. Thrift Savings Plan" /></label>
+        <label>Balance <input type="number" id="manual-acct-balance" placeholder="50000.00" step="0.01" /></label>
+        <label>Type
+          <select id="manual-acct-type">
+            <option value="depository">Checking / Savings</option>
+            <option value="investment">Investment / Retirement</option>
+            <option value="credit">Credit Card</option>
+            <option value="loan">Loan / Mortgage</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" id="manual-cancel">Cancel</button>
+        <button class="btn-primary" id="manual-save">Save</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
 </body>
 </html>
