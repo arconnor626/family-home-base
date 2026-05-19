@@ -28,23 +28,31 @@ secure backend and access control to it.
 
 ## Current phase
 
-**Phase 1 — authentication.** Login page, Worker auth routes, session tokens,
-and user seed script are built. KV namespace creation and user seeding still
-required before the site can be tested end-to-end.
+**Phase 1 — COMPLETE.** Authentication is fully deployed and live.
+
+## Deployed URLs
+
+- **Frontend:** `https://master.connor-family-hub-v2.pages.dev` (Cloudflare Pages, `public/`)
+- **Worker:** `https://connor-family-hub.arconnor626.workers.dev` (Cloudflare Worker)
+- **KV namespace:** `FAMILY_HUB_KV` — id `33a7160b8d84400c87051ce1ebbaf75e`
+
+## What is deployed
+
+- Login page (`public/login.html`) — gates the entire site
+- App shell (`public/index.html`) — requires valid session to load
+- Worker auth routes: `POST /auth/login`, `POST /auth/logout`, `GET /auth/session`
+- PBKDF2 password hashing (100k iterations, SHA-256), 7-day KV-backed sessions
+- Two user accounts seeded: Alex (admin) and Jen (parent)
 
 ## Exact next action
 
-1. Create the KV namespace (if not done): from `worker/`, run
-   `npx wrangler kv namespace create FAMILY_HUB_KV` and paste the returned `id`
-   into `worker/wrangler.toml`.
-2. Seed the two user accounts: `node scripts/create-users.js` (from `worker/`),
-   then run the printed `wrangler kv key put` commands.
-3. Test locally: `npx wrangler dev` in `worker/`, serve `public/` on a second
-   port (e.g. VS Code Live Server), open `login.html`.
-4. Deploy: `npx wrangler deploy` for the Worker; `git push` to redeploy Pages.
-5. Update the TODO `WORKER_URL` in `public/js/auth.js` with the deployed Worker
-   URL, then `git push` again.
-6. Begin Phase 2 when ready.
+Begin **Phase 2** — the first feature module. Read `PROJECT_PLAN.md` for the
+Phase 2 scope. Re-read `DECISIONS.md` before starting to avoid relitigating
+settled choices.
+
+To redeploy after changes:
+- **Worker:** `wrangler deploy` from `worker/`
+- **Frontend:** `wrangler pages deploy public/ --project-name connor-family-hub-v2` from repo root
 
 ## Environment note
 
