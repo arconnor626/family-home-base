@@ -28,7 +28,7 @@ secure backend and access control to it.
 
 ## Current phase
 
-**Phase 1 — COMPLETE.** Authentication is fully deployed and live.
+**Phase 2 — COMPLETE.** Schedule and Finance views are live, backed by KV.
 
 ## Deployed URLs
 
@@ -39,16 +39,22 @@ secure backend and access control to it.
 ## What is deployed
 
 - Login page (`public/login.html`) — gates the entire site
-- App shell (`public/index.html`) — requires valid session to load
+- Full app shell (`public/index.html`) — Schedule + Finance sections, all modals
+- `public/js/app.js` — calendar, event CRUD, finance summary, transaction/account/goal CRUD
+- `public/css/style.css` — complete app styles (calendar grid, finance panels, modals)
 - Worker auth routes: `POST /auth/login`, `POST /auth/logout`, `GET /auth/session`
+- Worker schedule routes: `GET/POST /schedule/events`, `PUT/DELETE /schedule/events/:id`
+- Worker finance routes: `GET/POST /finance/accounts`, `PUT/DELETE /finance/accounts/:id`
+  `GET/POST /finance/transactions`, `DELETE /finance/transactions/:id`
+  `GET/POST /finance/goals`, `PUT/DELETE /finance/goals/:id`
+  `GET /finance/summary`
 - PBKDF2 password hashing (100k iterations, SHA-256), 7-day KV-backed sessions
 - Two user accounts seeded: Alex (admin) and Jen (parent)
 
 ## Exact next action
 
-Begin **Phase 2** — the first feature module. Read `PROJECT_PLAN.md` for the
-Phase 2 scope. Re-read `DECISIONS.md` before starting to avoid relitigating
-settled choices.
+Begin **Phase 3** — private-area UI + admin user-management panel. Read
+`PROJECT_PLAN.md` for scope. Re-read `DECISIONS.md` before starting.
 
 To redeploy after changes:
 - **Worker:** `wrangler deploy` from `worker/`

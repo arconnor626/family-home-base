@@ -38,46 +38,52 @@ if (user.role === 'admin') {
 
 // ── View toggle ───────────────────────────────────────────────────────────────
 
+// viewMode is 'family' or a userId string (e.g. 'user:alex')
 let viewMode = 'family';
 
-document.querySelectorAll('.toggle-view-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    viewMode = btn.dataset.view;
-    document.querySelectorAll('.toggle-view-btn').forEach(b => b.classList.toggle('active', b === btn));
-    renderCalendar();
-    renderToday();
-    if (financeLoaded) {
-      renderAccounts();
-      renderTransactions();
-      renderGoals();
-    }
+async function initViewSelect() {
+  const data = await api('GET', '/users');
+  const users = Array.isArray(data) ? data : [];
+  const select = document.getElementById('view-select');
+  users.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.name;
+    select.appendChild(opt);
   });
+}
+
+document.getElementById('view-select').addEventListener('change', e => {
+  viewMode = e.target.value;
+  renderCalendar();
+  renderToday();
+  if (financeLoaded) {
+    renderAccounts();
+    renderTransactions();
+    renderGoals();
+  }
 });
 
 // ── View filters ──────────────────────────────────────────────────────────────
 
 function visibleEvents() {
-  return viewMode === 'individual'
-    ? allEvents.filter(e => e.owner === user.id)
-    : allEvents.filter(e => e.visibility === 'shared');
+  if (viewMode === 'family') return allEvents.filter(e => e.visibility === 'shared');
+  return allEvents.filter(e => e.owner === viewMode);
 }
 
 function visibleAccounts() {
-  return viewMode === 'individual'
-    ? allAccounts.filter(a => a.owner === user.id)
-    : allAccounts.filter(a => a.visibility === 'shared');
+  if (viewMode === 'family') return allAccounts.filter(a => a.visibility === 'shared');
+  return allAccounts.filter(a => a.owner === viewMode);
 }
 
 function visibleTransactions() {
-  return viewMode === 'individual'
-    ? allTransactions.filter(t => t.owner === user.id)
-    : allTransactions.filter(t => t.visibility === 'shared');
+  if (viewMode === 'family') return allTransactions.filter(t => t.visibility === 'shared');
+  return allTransactions.filter(t => t.owner === viewMode);
 }
 
 function visibleGoals() {
-  return viewMode === 'individual'
-    ? allGoals.filter(g => g.owner === user.id)
-    : allGoals.filter(g => g.visibility === 'shared');
+  if (viewMode === 'family') return allGoals.filter(g => g.visibility === 'shared');
+  return allGoals.filter(g => g.owner === viewMode);
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -595,4 +601,5 @@ document.getElementById('user-save').addEventListener('click', async () => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
+initViewSelect();
 loadEvents();

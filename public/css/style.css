@@ -329,29 +329,27 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 /* ── View toggle ────────────────────────────────────────────────────────────── */
 .view-toggle {
   display: flex;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 2px;
-  gap: 2px;
+  align-items: center;
+  gap: 6px;
 }
-.toggle-view-btn {
-  padding: 3px 10px;
-  border: none;
-  background: none;
-  border-radius: 6px;
+.view-label {
   font-size: 0.8rem;
-  cursor: pointer;
   color: var(--muted);
-  transition: all .15s;
   white-space: nowrap;
 }
-.toggle-view-btn.active {
+.view-select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
+  font-size: 0.82rem;
   font-weight: 500;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  cursor: pointer;
+  outline: none;
+  transition: border-color .15s;
 }
+.view-select:focus { border-color: var(--accent); }
 
 /* ── Private badge ──────────────────────────────────────────────────────────── */
 .private-badge {

@@ -11,6 +11,9 @@ export async function handleAuth(request, env, pathname) {
   if (pathname === '/auth/session' && request.method === 'GET') {
     return sessionCheck(request, env);
   }
+  if (pathname === '/users' && request.method === 'GET') {
+    return listUsers(request, env);
+  }
   return null; // Not an auth route
 }
 
@@ -60,6 +63,23 @@ async function sessionCheck(request, env) {
 
   const user = JSON.parse(userRaw);
   return json({ ok: true, user: { id: user.id, name: user.name, role: user.role } });
+}
+
+async function listUsers(request, env) {
+  const token = extractToken(request);
+  const session = await validateSession(env.FAMILY_HUB_KV, token);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+
+  const { keys } = await env.FAMILY_HUB_KV.list({ prefix: 'user:' });
+  const users = await Promise.all(
+    keys.map(async k => {
+      const raw = await env.FAMILY_HUB_KV.get(k.name);
+      if (!raw) return null;
+      const u = JSON.parse(raw);
+      return { id: u.id, name: u.name };
+    })
+  );
+  return json(users.filter(Boolean));
 }
 
 // --- helpers -----------------------------------------------------------------

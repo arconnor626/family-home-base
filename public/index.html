@@ -19,8 +19,10 @@
     </nav>
     <div class="header-right">
       <div class="view-toggle">
-        <button class="toggle-view-btn active" data-view="family">Family</button>
-        <button class="toggle-view-btn" data-view="individual">Mine</button>
+        <span class="view-label">View:</span>
+        <select id="view-select" class="view-select">
+          <option value="family">Family</option>
+        </select>
       </div>
       <span id="user-greeting"></span>
       <button id="logout-btn" class="btn-secondary btn-sm">Sign out</button>
