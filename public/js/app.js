@@ -38,14 +38,14 @@ if (user.role === 'admin') {
 
 // ── View toggle ───────────────────────────────────────────────────────────────
 
-// viewMode is 'family' or a userId string (e.g. 'user:alex')
 let viewMode = 'family';
+let userList = [];
 
 async function initViewSelect() {
   const data = await api('GET', '/users');
-  const users = Array.isArray(data) ? data : [];
+  userList = Array.isArray(data) ? data : [];
   const select = document.getElementById('view-select');
-  users.forEach(u => {
+  userList.forEach(u => {
     const opt = document.createElement('option');
     opt.value = u.id;
     opt.textContent = u.name;
@@ -55,35 +55,76 @@ async function initViewSelect() {
 
 document.getElementById('view-select').addEventListener('change', e => {
   viewMode = e.target.value;
-  renderCalendar();
-  renderToday();
-  if (financeLoaded) {
-    renderAccounts();
-    renderTransactions();
-    renderGoals();
-  }
+  const active = document.querySelector('.section.active')?.id;
+  if (active === 'dashboard') renderDashboard(lastSummary);
+  if (active === 'schedule') { renderCalendar(); renderToday(); }
+  if (active === 'finance') { renderAccounts(); renderTransactions(); renderGoals(); renderBudgetCategories(); }
+  if (active === 'tasks') renderTasks();
+  if (active === 'projects') renderProjects();
 });
 
 // ── View filters ──────────────────────────────────────────────────────────────
 
-function visibleEvents() {
-  if (viewMode === 'family') return allEvents.filter(e => e.visibility === 'shared');
-  return allEvents.filter(e => e.owner === viewMode);
+function visibleEvents()          { return viewMode === 'family' ? allEvents.filter(e => e.visibility === 'shared')           : allEvents.filter(e => e.owner === viewMode); }
+function visibleAccounts()        { return viewMode === 'family' ? allAccounts.filter(a => a.visibility === 'shared')         : allAccounts.filter(a => a.owner === viewMode); }
+function visibleTransactions()    { return viewMode === 'family' ? allTransactions.filter(t => t.visibility === 'shared')     : allTransactions.filter(t => t.owner === viewMode); }
+function visibleGoals()           { return viewMode === 'family' ? allGoals.filter(g => g.visibility === 'shared')            : allGoals.filter(g => g.owner === viewMode); }
+function visibleTasks()           { return viewMode === 'family' ? allTasks.filter(t => t.visibility === 'shared')            : allTasks.filter(t => t.owner === viewMode); }
+function visibleProjects()        { return viewMode === 'family' ? allProjects.filter(p => p.visibility === 'shared')         : allProjects.filter(p => p.owner === viewMode); }
+function visibleBudgetCategories(){ return viewMode === 'family' ? allBudgetCategories.filter(c => c.visibility === 'shared') : allBudgetCategories.filter(c => c.owner === viewMode); }
+function visibleNotes()           { return viewMode === 'family' ? allNotes.filter(n => n.visibility === 'shared')            : allNotes.filter(n => n.owner === viewMode); }
+
+// ── Data stores ───────────────────────────────────────────────────────────────
+
+let allEvents = [], eventsLoaded = false;
+let allTasks = [], tasksLoaded = false;
+let allProjects = [], projectsLoaded = false;
+let allAccounts = [], allTransactions = [], allGoals = [], allBudgetCategories = [], financeLoaded = false;
+let allNotes = [], notesLoaded = false;
+let allUsers = [];
+let lastSummary = null;
+
+async function ensureEvents() {
+  if (eventsLoaded) return;
+  eventsLoaded = true;
+  const data = await api('GET', '/schedule/events');
+  allEvents = Array.isArray(data) ? data : [];
 }
 
-function visibleAccounts() {
-  if (viewMode === 'family') return allAccounts.filter(a => a.visibility === 'shared');
-  return allAccounts.filter(a => a.owner === viewMode);
+async function ensureTasks() {
+  if (tasksLoaded) return;
+  tasksLoaded = true;
+  const data = await api('GET', '/tasks');
+  allTasks = Array.isArray(data) ? data : [];
 }
 
-function visibleTransactions() {
-  if (viewMode === 'family') return allTransactions.filter(t => t.visibility === 'shared');
-  return allTransactions.filter(t => t.owner === viewMode);
+async function ensureProjects() {
+  if (projectsLoaded) return;
+  projectsLoaded = true;
+  const data = await api('GET', '/projects');
+  allProjects = Array.isArray(data) ? data : [];
 }
 
-function visibleGoals() {
-  if (viewMode === 'family') return allGoals.filter(g => g.visibility === 'shared');
-  return allGoals.filter(g => g.owner === viewMode);
+async function ensureFinance() {
+  if (financeLoaded) return;
+  financeLoaded = true;
+  const [accounts, transactions, goals, budgetCats] = await Promise.all([
+    api('GET', '/finance/accounts'),
+    api('GET', '/finance/transactions'),
+    api('GET', '/finance/goals'),
+    api('GET', '/finance/budget-categories'),
+  ]);
+  allAccounts = Array.isArray(accounts) ? accounts : [];
+  allTransactions = Array.isArray(transactions) ? transactions : [];
+  allGoals = Array.isArray(goals) ? goals : [];
+  allBudgetCategories = Array.isArray(budgetCats) ? budgetCats : [];
+}
+
+async function ensureNotes() {
+  if (notesLoaded) return;
+  notesLoaded = true;
+  const data = await api('GET', '/notes');
+  allNotes = Array.isArray(data) ? data : [];
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -94,48 +135,173 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(btn.dataset.section).classList.add('active');
-    if (btn.dataset.section === 'finance') loadFinance();
-    if (btn.dataset.section === 'admin') loadUsers();
+    if (btn.dataset.section === 'dashboard') loadDashboard();
+    if (btn.dataset.section === 'schedule')  loadSchedule();
+    if (btn.dataset.section === 'finance')   loadFinance();
+    if (btn.dataset.section === 'tasks')     loadTasks();
+    if (btn.dataset.section === 'projects')  loadProjects();
+    if (btn.dataset.section === 'admin')     loadUsers();
   });
 });
 
 // ── Modal helpers ─────────────────────────────────────────────────────────────
 
 const overlay = document.getElementById('modal-overlay');
+const ALL_MODALS = ['event-modal','goal-modal','manual-modal','task-modal','project-modal','budget-cat-modal','user-modal'];
 
-function openModal(id) {
-  overlay.classList.remove('hidden');
-  document.getElementById(id).classList.remove('hidden');
-}
+function openModal(id)  { overlay.classList.remove('hidden'); document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { overlay.classList.add('hidden');    document.getElementById(id).classList.add('hidden'); }
 
-function closeModal(id) {
-  overlay.classList.add('hidden');
-  document.getElementById(id).classList.add('hidden');
-}
+overlay.addEventListener('click', e => { if (e.target === overlay) ALL_MODALS.forEach(closeModal); });
 
-overlay.addEventListener('click', e => {
-  if (e.target === overlay) {
-    ['event-modal', 'goal-modal', 'manual-modal', 'user-modal'].forEach(closeModal);
-  }
-});
+// ── Utilities ─────────────────────────────────────────────────────────────────
 
 function fmt(n) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-function privateBadge(record) {
-  return record.visibility === 'private' ? '<span class="badge private-badge">private</span>' : '';
+function privateBadge(r) {
+  return r.visibility === 'private' ? '<span class="badge private-badge">private</span>' : '';
 }
+
+function toDateStr(d) { return d.toISOString().slice(0, 10); }
+
+const TODAY = toDateStr(new Date());
+
+function dueBadge(dueDate, status) {
+  if (!dueDate) return '';
+  const overdue = status === 'open' && dueDate < TODAY;
+  return `<span class="task-due ${overdue ? 'overdue' : ''}">${dueDate}</span>`;
+}
+
+function refreshDashboardIfActive() {
+  if (document.getElementById('dashboard').classList.contains('active')) {
+    renderDashboardTasksWidget();
+    document.getElementById('dash-open-tasks').textContent =
+      allTasks.filter(t => t.status === 'open').length;
+  }
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+
+async function loadDashboard() {
+  const [summary] = await Promise.all([
+    api('GET', '/finance/summary'),
+    ensureEvents(),
+    ensureTasks(),
+    ensureNotes(),
+  ]);
+  lastSummary = summary;
+  renderDashboard(summary);
+}
+
+function renderDashboard(summary) {
+  // Stats row
+  if (summary) {
+    document.getElementById('dash-net-worth').textContent = fmt(summary.netWorth);
+    document.getElementById('dash-spending').textContent  = fmt(summary.monthlySpending);
+  }
+  document.getElementById('dash-open-tasks').textContent =
+    allTasks.filter(t => t.status === 'open').length;
+
+  renderDashboardEventsWidget();
+  renderDashboardTasksWidget();
+  renderDashboardNotesWidget();
+}
+
+function renderDashboardEventsWidget() {
+  const el = document.getElementById('dash-events');
+  const todayEvents = visibleEvents()
+    .filter(e => e.date === TODAY)
+    .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  if (!todayEvents.length) {
+    el.innerHTML = '<p class="empty-msg">Nothing scheduled today.</p>';
+    return;
+  }
+  el.innerHTML = todayEvents.map(e => `
+    <div class="today-event">
+      <span class="event-dot"></span>
+      <div>
+        <strong>${e.title}</strong>
+        ${e.allDay ? '<span class="badge">all day</span>' : (e.time ? `<span class="event-time">${e.time}${e.endTime ? ' – ' + e.endTime : ''}</span>` : '')}
+        ${e.description ? `<div class="event-desc">${e.description}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderDashboardTasksWidget() {
+  const el = document.getElementById('dash-tasks');
+  const in7 = new Date();
+  in7.setDate(in7.getDate() + 7);
+  const in7Str = toDateStr(in7);
+
+  const upcoming = visibleTasks()
+    .filter(t => t.status === 'open' && t.dueDate && t.dueDate <= in7Str)
+    .slice(0, 6);
+
+  const overdue = visibleTasks()
+    .filter(t => t.status === 'open' && t.dueDate && t.dueDate < TODAY);
+
+  if (!upcoming.length && !overdue.length) {
+    el.innerHTML = '<p class="empty-msg">No tasks due in the next 7 days.</p>';
+    return;
+  }
+
+  const rows = [...new Map([...overdue, ...upcoming].map(t => [t.id, t])).values()];
+  el.innerHTML = rows.map(t => `
+    <div class="dash-task-row">
+      <span class="task-priority-dot priority-${t.priority}"></span>
+      <span class="dash-task-title">${t.title}</span>
+      ${dueBadge(t.dueDate, t.status)}
+    </div>
+  `).join('');
+}
+
+function renderDashboardNotesWidget() {
+  const el = document.getElementById('dash-notes');
+  const notes = visibleNotes();
+  if (!notes.length) {
+    el.innerHTML = '<p class="empty-msg">No notes yet.</p>';
+    return;
+  }
+  el.innerHTML = notes.map(n => `
+    <div class="note-item">
+      <span class="note-text">${n.text}</span>
+      <span class="note-author">${userList.find(u => u.id === n.owner)?.name ?? ''}</span>
+      <button class="btn-icon delete-note" data-id="${n.id}" title="Dismiss">×</button>
+    </div>
+  `).join('');
+  el.querySelectorAll('.delete-note').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await api('DELETE', `/notes/${btn.dataset.id}`);
+      allNotes = allNotes.filter(n => n.id !== btn.dataset.id);
+      renderDashboardNotesWidget();
+    });
+  });
+}
+
+document.getElementById('note-add-btn').addEventListener('click', async () => {
+  const input = document.getElementById('note-input');
+  const text = input.value.trim();
+  if (!text) return;
+  const created = await api('POST', '/notes', { text, visibility: 'shared' });
+  allNotes.unshift(created);
+  input.value = '';
+  renderDashboardNotesWidget();
+});
+
+document.getElementById('note-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('note-add-btn').click();
+});
 
 // ── SCHEDULE ──────────────────────────────────────────────────────────────────
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 let weekOffset = 0;
-let allEvents = [];
 
-async function loadEvents() {
-  const data = await api('GET', '/schedule/events');
-  allEvents = Array.isArray(data) ? data : [];
+async function loadSchedule() {
+  await ensureEvents();
   renderCalendar();
   renderToday();
 }
@@ -147,33 +313,21 @@ function weekStart(offset) {
   return d;
 }
 
-function toDateStr(d) {
-  return d.toISOString().slice(0, 10);
-}
-
 function renderCalendar() {
-  const grid = document.getElementById('calendar-grid');
+  const grid  = document.getElementById('calendar-grid');
   const start = weekStart(weekOffset);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
+  const end   = new Date(start); end.setDate(end.getDate() + 6);
   document.getElementById('week-label').textContent =
     `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
-
-  const todayStr = toDateStr(new Date());
+  const days   = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; });
   const events = visibleEvents();
 
   grid.innerHTML = days.map(day => {
-    const dateStr = toDateStr(day);
+    const dateStr   = toDateStr(day);
     const dayEvents = events.filter(e => e.date === dateStr);
-    const isToday = dateStr === todayStr;
     return `
-      <div class="cal-day ${isToday ? 'today' : ''}">
+      <div class="cal-day ${dateStr === TODAY ? 'today' : ''}">
         <div class="cal-day-header">
           <span class="cal-day-name">${DAYS[day.getDay()]}</span>
           <span class="cal-day-num">${day.getDate()}</span>
@@ -197,28 +351,22 @@ function renderCalendar() {
       if (!confirm('Delete this event?')) return;
       await api('DELETE', `/schedule/events/${btn.dataset.id}`);
       allEvents = allEvents.filter(ev => ev.id !== btn.dataset.id);
-      renderCalendar();
-      renderToday();
+      renderCalendar(); renderToday();
     });
   });
 }
 
 function renderToday() {
-  const todayStr = toDateStr(new Date());
   const todayEvents = visibleEvents()
-    .filter(e => e.date === todayStr)
+    .filter(e => e.date === TODAY)
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   const el = document.getElementById('today-events');
-  if (!todayEvents.length) {
-    el.innerHTML = '<p class="empty-msg">Nothing scheduled today.</p>';
-    return;
-  }
+  if (!todayEvents.length) { el.innerHTML = '<p class="empty-msg">Nothing scheduled today.</p>'; return; }
   el.innerHTML = todayEvents.map(e => `
     <div class="today-event">
       <span class="event-dot"></span>
       <div>
-        <strong>${e.title}</strong>
-        ${privateBadge(e)}
+        <strong>${e.title}</strong> ${privateBadge(e)}
         ${e.allDay ? '<span class="badge">all day</span>' : (e.time ? `<span class="event-time">${e.time}${e.endTime ? ' – ' + e.endTime : ''}</span>` : '')}
         ${e.description ? `<div class="event-desc">${e.description}</div>` : ''}
       </div>
@@ -235,7 +383,7 @@ document.getElementById('add-event-btn').addEventListener('click', () => {
   editingEventId = null;
   document.getElementById('event-modal-title').textContent = 'Add Event';
   document.getElementById('event-title').value = '';
-  document.getElementById('event-date').value = toDateStr(new Date());
+  document.getElementById('event-date').value = TODAY;
   document.getElementById('event-allday').checked = true;
   document.getElementById('event-time-fields').classList.add('hidden');
   document.getElementById('event-time').value = '';
@@ -253,9 +401,8 @@ document.getElementById('event-cancel').addEventListener('click', () => closeMod
 
 document.getElementById('event-save').addEventListener('click', async () => {
   const title = document.getElementById('event-title').value.trim();
-  const date = document.getElementById('event-date').value;
+  const date  = document.getElementById('event-date').value;
   if (!title || !date) { alert('Title and date are required.'); return; }
-
   const allDay = document.getElementById('event-allday').checked;
   const body = {
     title, date, allDay,
@@ -264,52 +411,42 @@ document.getElementById('event-save').addEventListener('click', async () => {
     description: document.getElementById('event-description').value.trim(),
     visibility: document.getElementById('event-visibility').value,
   };
-
   if (editingEventId) {
     const updated = await api('PUT', `/schedule/events/${editingEventId}`, body);
     allEvents = allEvents.map(e => e.id === editingEventId ? updated : e);
   } else {
-    const created = await api('POST', '/schedule/events', body);
-    allEvents.push(created);
+    allEvents.push(await api('POST', '/schedule/events', body));
   }
-  closeModal('event-modal');
-  renderCalendar();
-  renderToday();
+  closeModal('event-modal'); renderCalendar(); renderToday();
 });
 
 // ── FINANCE ───────────────────────────────────────────────────────────────────
 
-let allAccounts = [];
-let allTransactions = [];
-let allGoals = [];
-let financeLoaded = false;
-
 async function loadFinance() {
-  if (financeLoaded) return;
-  financeLoaded = true;
-  const [accounts, transactions, goals, summary] = await Promise.all([
-    api('GET', '/finance/accounts'),
-    api('GET', '/finance/transactions'),
-    api('GET', '/finance/goals'),
-    api('GET', '/finance/summary'),
-  ]);
-  allAccounts = Array.isArray(accounts) ? accounts : [];
-  allTransactions = Array.isArray(transactions) ? transactions : [];
-  allGoals = Array.isArray(goals) ? goals : [];
+  await ensureFinance();
+  const summary = await api('GET', '/finance/summary');
+  lastSummary = summary;
   renderSummary(summary);
   renderAccounts();
   renderTransactions();
   renderGoals();
+  renderBudgetCategories();
 }
 
 function renderSummary(s) {
   if (!s) return;
-  document.getElementById('net-worth').textContent = fmt(s.netWorth);
-  document.getElementById('total-assets').textContent = fmt(s.totalAssets);
-  document.getElementById('total-debt').textContent = fmt(s.totalDebt);
+  document.getElementById('net-worth').textContent      = fmt(s.netWorth);
+  document.getElementById('total-assets').textContent   = fmt(s.totalAssets);
+  document.getElementById('total-debt').textContent     = fmt(s.totalDebt);
   document.getElementById('monthly-spending').textContent = fmt(s.monthlySpending);
-  document.getElementById('tax-income').textContent = fmt(s.quarterlyIncome);
-  document.getElementById('tax-owed').textContent = fmt(s.estimatedTax);
+  document.getElementById('tax-income').textContent     = fmt(s.quarterlyIncome);
+  document.getElementById('tax-owed').textContent       = fmt(s.estimatedTax);
+}
+
+async function refreshSummary() {
+  const s = await api('GET', '/finance/summary');
+  lastSummary = s;
+  renderSummary(s);
 }
 
 function renderAccounts() {
@@ -331,31 +468,26 @@ function renderAccounts() {
       if (!confirm('Delete this account?')) return;
       await api('DELETE', `/finance/accounts/${btn.dataset.id}`);
       allAccounts = allAccounts.filter(a => a.id !== btn.dataset.id);
-      renderAccounts();
-      refreshSummary();
+      renderAccounts(); refreshSummary();
     });
   });
 }
 
 function renderTransactions() {
   const search = document.getElementById('tx-search').value.toLowerCase();
-  const cat = document.getElementById('tx-category-filter').value;
-  const base = visibleTransactions();
+  const cat    = document.getElementById('tx-category-filter').value;
+  const base   = visibleTransactions();
   const filtered = base.filter(t =>
     (!search || t.description.toLowerCase().includes(search)) &&
     (!cat || t.category === cat)
   );
-
-  // Rebuild category options from current visible set
   const cats = [...new Set(base.map(t => t.category).filter(Boolean))].sort();
   const catFilter = document.getElementById('tx-category-filter');
-  const currentCat = catFilter.value;
+  const cur = catFilter.value;
   catFilter.innerHTML = '<option value="">All categories</option>' +
-    cats.map(c => `<option value="${c}" ${c === currentCat ? 'selected' : ''}>${c}</option>`).join('');
-
+    cats.map(c => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c}</option>`).join('');
   const el = document.getElementById('transactions-list');
   if (!filtered.length) { el.innerHTML = '<p class="empty-msg">No transactions.</p>'; return; }
-
   el.innerHTML = filtered.slice(0, 50).map(t => `
     <div class="tx-row">
       <span class="tx-date">${t.date}</span>
@@ -374,8 +506,7 @@ function renderTransactions() {
       if (!confirm('Delete this transaction?')) return;
       await api('DELETE', `/finance/transactions/${btn.dataset.id}`);
       allTransactions = allTransactions.filter(t => t.id !== btn.dataset.id);
-      renderTransactions();
-      refreshSummary();
+      renderTransactions(); refreshSummary();
     });
   });
 }
@@ -396,9 +527,7 @@ function renderGoals() {
           <span>${pct.toFixed(0)}%</span>
         </div>
         <div class="goal-bar"><div class="goal-fill" style="width:${pct}%"></div></div>
-        <div class="goal-amounts">
-          <span>${fmt(g.current)}</span><span>of ${fmt(g.target)}</span>
-        </div>
+        <div class="goal-amounts"><span>${fmt(g.current)}</span><span>of ${fmt(g.target)}</span></div>
         <button class="btn-icon delete-goal" data-id="${g.id}" title="Delete">×</button>
       </div>`;
   }).join('');
@@ -412,102 +541,384 @@ function renderGoals() {
   });
 }
 
-async function refreshSummary() {
-  const s = await api('GET', '/finance/summary');
-  renderSummary(s);
+function renderBudgetCategories() {
+  const el = document.getElementById('budget-categories-list');
+  const cats = visibleBudgetCategories();
+  if (!cats.length) { el.innerHTML = '<p class="empty-msg">No categories yet. Add a category to track spending against a monthly target.</p>'; return; }
+
+  const monthStart = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`;
+
+  el.innerHTML = cats.map(c => {
+    const actual = allTransactions
+      .filter(t => t.type === 'debit' && t.date >= monthStart && t.category?.toLowerCase() === c.name.toLowerCase())
+      .reduce((s, t) => s + Math.abs(t.amount), 0);
+    const pct  = c.monthlyTarget > 0 ? Math.min(110, (actual / c.monthlyTarget) * 100) : 0;
+    const over = actual > c.monthlyTarget;
+    return `
+      <div class="budget-cat-row">
+        <div class="budget-cat-info"><strong>${c.name}</strong></div>
+        <div class="budget-cat-bar-wrap">
+          <div class="goal-bar">
+            <div class="goal-fill ${over ? 'over-budget' : ''}" style="width:${Math.min(100,pct)}%"></div>
+          </div>
+          <div class="budget-cat-amounts">
+            <span class="${over ? 'text-danger' : ''}">${fmt(actual)}</span>
+            <span class="text-muted"> / ${fmt(c.monthlyTarget)}</span>
+          </div>
+        </div>
+        <div class="budget-cat-actions">
+          <button class="btn-icon edit-bc" data-id="${c.id}" title="Edit">✎</button>
+          <button class="btn-icon delete-bc" data-id="${c.id}" title="Delete">×</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  el.querySelectorAll('.edit-bc').forEach(btn => {
+    btn.addEventListener('click', () => openBudgetCatModal(btn.dataset.id));
+  });
+  el.querySelectorAll('.delete-bc').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this category?')) return;
+      await api('DELETE', `/finance/budget-categories/${btn.dataset.id}`);
+      allBudgetCategories = allBudgetCategories.filter(c => c.id !== btn.dataset.id);
+      renderBudgetCategories();
+    });
+  });
 }
 
 // Goal modal
 document.getElementById('add-goal-btn').addEventListener('click', () => {
-  document.getElementById('goal-name').value = '';
+  ['goal-name','goal-category'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('goal-target').value = '';
   document.getElementById('goal-current').value = '0';
-  document.getElementById('goal-category').value = '';
   document.getElementById('goal-date').value = '';
   document.getElementById('goal-visibility').value = 'shared';
   openModal('goal-modal');
 });
 document.getElementById('goal-cancel').addEventListener('click', () => closeModal('goal-modal'));
 document.getElementById('goal-save').addEventListener('click', async () => {
-  const name = document.getElementById('goal-name').value.trim();
+  const name   = document.getElementById('goal-name').value.trim();
   const target = parseFloat(document.getElementById('goal-target').value);
   if (!name || isNaN(target)) { alert('Name and target amount are required.'); return; }
   const created = await api('POST', '/finance/goals', {
     name, target,
-    current: parseFloat(document.getElementById('goal-current').value) || 0,
-    category: document.getElementById('goal-category').value.trim(),
+    current:    parseFloat(document.getElementById('goal-current').value) || 0,
+    category:   document.getElementById('goal-category').value.trim(),
     targetDate: document.getElementById('goal-date').value || null,
     visibility: document.getElementById('goal-visibility').value,
   });
   allGoals.push(created);
-  closeModal('goal-modal');
-  renderGoals();
+  closeModal('goal-modal'); renderGoals();
 });
 
 // Manual entry modal
 document.getElementById('manual-entry-btn').addEventListener('click', () => {
-  document.getElementById('manual-date').value = toDateStr(new Date());
-  document.getElementById('manual-desc').value = '';
+  document.getElementById('manual-date').value = TODAY;
+  ['manual-desc','manual-category','manual-acct-name','manual-acct-inst'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('manual-amount').value = '';
-  document.getElementById('manual-category').value = '';
-  document.getElementById('manual-acct-name').value = '';
-  document.getElementById('manual-acct-inst').value = '';
   document.getElementById('manual-acct-balance').value = '';
   document.getElementById('manual-visibility').value = 'shared';
-  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector('.toggle-btn[data-type="transaction"]').classList.add('active');
+  document.querySelectorAll('#manual-modal .toggle-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('#manual-modal .toggle-btn[data-type="transaction"]').classList.add('active');
   document.getElementById('manual-tx-fields').classList.remove('hidden');
   document.getElementById('manual-acct-fields').classList.add('hidden');
   openModal('manual-modal');
 });
-
-document.querySelectorAll('.toggle-btn').forEach(btn => {
+document.querySelectorAll('#manual-modal .toggle-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#manual-modal .toggle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const isTx = btn.dataset.type === 'transaction';
     document.getElementById('manual-tx-fields').classList.toggle('hidden', !isTx);
     document.getElementById('manual-acct-fields').classList.toggle('hidden', isTx);
   });
 });
-
 document.getElementById('manual-cancel').addEventListener('click', () => closeModal('manual-modal'));
 document.getElementById('manual-save').addEventListener('click', async () => {
-  const isTx = document.querySelector('.toggle-btn.active').dataset.type === 'transaction';
+  const isTx = document.querySelector('#manual-modal .toggle-btn.active').dataset.type === 'transaction';
   const visibility = document.getElementById('manual-visibility').value;
   if (isTx) {
-    const date = document.getElementById('manual-date').value;
+    const date        = document.getElementById('manual-date').value;
     const description = document.getElementById('manual-desc').value.trim();
-    const amount = parseFloat(document.getElementById('manual-amount').value);
+    const amount      = parseFloat(document.getElementById('manual-amount').value);
     if (!date || !description || isNaN(amount)) { alert('Date, description, and amount are required.'); return; }
-    const created = await api('POST', '/finance/transactions', {
+    allTransactions.unshift(await api('POST', '/finance/transactions', {
       date, description, amount, visibility,
-      type: document.getElementById('manual-type').value,
+      type:     document.getElementById('manual-type').value,
       category: document.getElementById('manual-category').value.trim(),
-    });
-    allTransactions.unshift(created);
-    renderTransactions();
-    refreshSummary();
+    }));
+    renderTransactions(); refreshSummary();
   } else {
-    const name = document.getElementById('manual-acct-name').value.trim();
+    const name    = document.getElementById('manual-acct-name').value.trim();
     const balance = parseFloat(document.getElementById('manual-acct-balance').value);
     if (!name || isNaN(balance)) { alert('Account name and balance are required.'); return; }
-    const created = await api('POST', '/finance/accounts', {
+    allAccounts.push(await api('POST', '/finance/accounts', {
       name, balance, visibility,
       institution: document.getElementById('manual-acct-inst').value.trim(),
-      type: document.getElementById('manual-acct-type').value,
-    });
-    allAccounts.push(created);
-    renderAccounts();
-    refreshSummary();
+      type:        document.getElementById('manual-acct-type').value,
+    }));
+    renderAccounts(); refreshSummary();
   }
   closeModal('manual-modal');
 });
 
-// ── ADMIN ─────────────────────────────────────────────────────────────────────
+// Budget category modal
+let editingBcId = null;
 
-let allUsers = [];
-let editingUserId = null;
+function openBudgetCatModal(bcId = null) {
+  editingBcId = bcId;
+  document.getElementById('budget-cat-modal-title').textContent = bcId ? 'Edit Category' : 'Add Category';
+  if (bcId) {
+    const c = allBudgetCategories.find(c => c.id === bcId);
+    if (!c) return;
+    document.getElementById('bc-name').value   = c.name;
+    document.getElementById('bc-target').value = c.monthlyTarget;
+  } else {
+    document.getElementById('bc-name').value   = '';
+    document.getElementById('bc-target').value = '';
+  }
+  openModal('budget-cat-modal');
+}
+
+document.getElementById('add-budget-cat-btn').addEventListener('click', () => openBudgetCatModal());
+document.getElementById('bc-cancel').addEventListener('click', () => closeModal('budget-cat-modal'));
+document.getElementById('bc-save').addEventListener('click', async () => {
+  const name   = document.getElementById('bc-name').value.trim();
+  const target = parseFloat(document.getElementById('bc-target').value);
+  if (!name || isNaN(target)) { alert('Category name and monthly target are required.'); return; }
+  if (editingBcId) {
+    const updated = await api('PUT', `/finance/budget-categories/${editingBcId}`, { name, monthlyTarget: target });
+    allBudgetCategories = allBudgetCategories.map(c => c.id === editingBcId ? updated : c);
+  } else {
+    allBudgetCategories.push(await api('POST', '/finance/budget-categories', { name, monthlyTarget: target }));
+  }
+  closeModal('budget-cat-modal'); renderBudgetCategories();
+});
+
+// ── TASKS ─────────────────────────────────────────────────────────────────────
+
+async function loadTasks() {
+  await Promise.all([ensureTasks(), ensureProjects()]);
+  // Populate filter selects
+  const af = document.getElementById('task-assignee-filter');
+  af.innerHTML = '<option value="">All assignees</option>' +
+    userList.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+  const pf = document.getElementById('task-project-filter');
+  pf.innerHTML = '<option value="">All projects</option>' +
+    allProjects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  renderTasks();
+}
+
+['task-status-filter','task-assignee-filter','task-project-filter'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderTasks);
+});
+
+function renderTasks() {
+  const sf = document.getElementById('task-status-filter').value;
+  const af = document.getElementById('task-assignee-filter').value;
+  const pf = document.getElementById('task-project-filter').value;
+
+  let tasks = visibleTasks();
+  if (sf) tasks = tasks.filter(t => t.status === sf);
+  if (af) tasks = tasks.filter(t => t.assignee === af);
+  if (pf) tasks = tasks.filter(t => t.projectId === pf);
+
+  tasks.sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'open' ? -1 : 1;
+    if (!a.dueDate && !b.dueDate) return 0;
+    if (!a.dueDate) return 1; if (!b.dueDate) return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  });
+
+  const el = document.getElementById('tasks-list');
+  if (!tasks.length) { el.innerHTML = '<p class="empty-msg">No tasks.</p>'; return; }
+
+  el.innerHTML = tasks.map(t => {
+    const project      = allProjects.find(p => p.id === t.projectId);
+    const assigneeUser = userList.find(u => u.id === t.assignee);
+    return `
+      <div class="task-row ${t.status === 'done' ? 'task-done-row' : ''}">
+        <input type="checkbox" class="task-check" data-id="${t.id}" ${t.status === 'done' ? 'checked' : ''} />
+        <span class="task-priority-dot priority-${t.priority}"></span>
+        <div class="task-info">
+          <span class="task-title ${t.status === 'done' ? 'task-done' : ''}">${t.title}</span>
+          ${project ? `<span class="task-project-tag">${project.name}</span>` : ''}
+        </div>
+        <div class="task-meta">
+          ${dueBadge(t.dueDate, t.status)}
+          ${assigneeUser ? `<span class="badge">${assigneeUser.name}</span>` : ''}
+          ${privateBadge(t)}
+        </div>
+        <button class="btn-secondary btn-sm edit-task" data-id="${t.id}">Edit</button>
+        <button class="btn-icon delete-task" data-id="${t.id}" title="Delete">×</button>
+      </div>`;
+  }).join('');
+
+  el.querySelectorAll('.task-check').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const updated = await api('PUT', `/tasks/${cb.dataset.id}`, { status: cb.checked ? 'done' : 'open' });
+      allTasks = allTasks.map(t => t.id === cb.dataset.id ? updated : t);
+      renderTasks(); refreshDashboardIfActive();
+    });
+  });
+  el.querySelectorAll('.edit-task').forEach(btn => {
+    btn.addEventListener('click', () => openTaskModal(btn.dataset.id));
+  });
+  el.querySelectorAll('.delete-task').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this task?')) return;
+      await api('DELETE', `/tasks/${btn.dataset.id}`);
+      allTasks = allTasks.filter(t => t.id !== btn.dataset.id);
+      renderTasks(); refreshDashboardIfActive();
+    });
+  });
+}
+
+let editingTaskId = null;
+
+function openTaskModal(taskId = null) {
+  editingTaskId = taskId;
+  document.getElementById('task-modal-title').textContent = taskId ? 'Edit Task' : 'Add Task';
+
+  // Populate assignee + project selects
+  document.getElementById('task-assignee').innerHTML =
+    '<option value="">Unassigned</option>' +
+    userList.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+  document.getElementById('task-project').innerHTML =
+    '<option value="">No project</option>' +
+    allProjects.filter(p => p.status !== 'complete').map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+  const task = taskId ? allTasks.find(t => t.id === taskId) : null;
+  document.getElementById('task-title').value        = task?.title      ?? '';
+  document.getElementById('task-due').value          = task?.dueDate    ?? '';
+  document.getElementById('task-assignee').value     = task?.assignee   ?? '';
+  document.getElementById('task-project').value      = task?.projectId  ?? '';
+  document.getElementById('task-notes').value        = task?.notes      ?? '';
+  document.getElementById('task-visibility').value   = task?.visibility ?? 'shared';
+
+  const priority = task?.priority ?? 'normal';
+  document.querySelectorAll('#task-modal .toggle-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.priority === priority));
+
+  openModal('task-modal');
+}
+
+document.getElementById('add-task-btn').addEventListener('click', () => openTaskModal());
+document.getElementById('task-cancel').addEventListener('click', () => closeModal('task-modal'));
+
+document.querySelectorAll('#task-modal .toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#task-modal .toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+document.getElementById('task-save').addEventListener('click', async () => {
+  const title = document.getElementById('task-title').value.trim();
+  if (!title) { alert('Title is required.'); return; }
+  const priority = document.querySelector('#task-modal .toggle-btn.active')?.dataset.priority ?? 'normal';
+  const body = {
+    title,
+    dueDate:    document.getElementById('task-due').value || null,
+    assignee:   document.getElementById('task-assignee').value || null,
+    priority,
+    projectId:  document.getElementById('task-project').value || null,
+    notes:      document.getElementById('task-notes').value.trim(),
+    visibility: document.getElementById('task-visibility').value,
+  };
+  if (editingTaskId) {
+    const updated = await api('PUT', `/tasks/${editingTaskId}`, body);
+    allTasks = allTasks.map(t => t.id === editingTaskId ? updated : t);
+  } else {
+    allTasks.push(await api('POST', '/tasks', body));
+  }
+  closeModal('task-modal'); renderTasks(); refreshDashboardIfActive();
+});
+
+// ── PROJECTS ──────────────────────────────────────────────────────────────────
+
+async function loadProjects() {
+  await Promise.all([ensureProjects(), ensureTasks()]);
+  renderProjects();
+}
+
+function renderProjects() {
+  const el = document.getElementById('projects-grid');
+  const projects = visibleProjects();
+  if (!projects.length) {
+    el.innerHTML = '<p class="empty-msg" style="padding:16px 0">No projects yet.</p>';
+    return;
+  }
+  el.innerHTML = projects.map(p => {
+    const open  = allTasks.filter(t => t.projectId === p.id && t.status === 'open').length;
+    const total = allTasks.filter(t => t.projectId === p.id).length;
+    return `
+      <div class="project-card">
+        <div class="project-header">
+          <h3>${p.name} ${privateBadge(p)}</h3>
+          <span class="status-badge status-${p.status}">${p.status}</span>
+        </div>
+        ${p.description ? `<p class="project-desc">${p.description}</p>` : ''}
+        <div class="project-meta">
+          <span>${open} open / ${total} task${total !== 1 ? 's' : ''}</span>
+          ${p.budget ? `<span>${fmt(p.budget)} budget</span>` : ''}
+        </div>
+        <div class="project-actions">
+          <button class="btn-secondary btn-sm edit-project" data-id="${p.id}">Edit</button>
+          <button class="btn-icon delete-project" data-id="${p.id}" title="Delete">×</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  el.querySelectorAll('.edit-project').forEach(btn => {
+    btn.addEventListener('click', () => openProjectModal(btn.dataset.id));
+  });
+  el.querySelectorAll('.delete-project').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this project?')) return;
+      await api('DELETE', `/projects/${btn.dataset.id}`);
+      allProjects = allProjects.filter(p => p.id !== btn.dataset.id);
+      renderProjects();
+    });
+  });
+}
+
+let editingProjectId = null;
+
+function openProjectModal(projectId = null) {
+  editingProjectId = projectId;
+  document.getElementById('project-modal-title').textContent = projectId ? 'Edit Project' : 'Add Project';
+  const p = projectId ? allProjects.find(p => p.id === projectId) : null;
+  document.getElementById('project-name').value        = p?.name        ?? '';
+  document.getElementById('project-desc').value        = p?.description ?? '';
+  document.getElementById('project-status').value      = p?.status      ?? 'active';
+  document.getElementById('project-budget').value      = p?.budget      ?? '';
+  document.getElementById('project-visibility').value  = p?.visibility  ?? 'shared';
+  openModal('project-modal');
+}
+
+document.getElementById('add-project-btn').addEventListener('click', () => openProjectModal());
+document.getElementById('project-cancel').addEventListener('click', () => closeModal('project-modal'));
+document.getElementById('project-save').addEventListener('click', async () => {
+  const name = document.getElementById('project-name').value.trim();
+  if (!name) { alert('Project name is required.'); return; }
+  const body = {
+    name,
+    description: document.getElementById('project-desc').value.trim(),
+    status:      document.getElementById('project-status').value,
+    budget:      document.getElementById('project-budget').value || null,
+    visibility:  document.getElementById('project-visibility').value,
+  };
+  if (editingProjectId) {
+    const updated = await api('PUT', `/projects/${editingProjectId}`, body);
+    allProjects = allProjects.map(p => p.id === editingProjectId ? updated : p);
+  } else {
+    allProjects.push(await api('POST', '/projects', body));
+  }
+  closeModal('project-modal'); renderProjects();
+});
+
+// ── ADMIN ─────────────────────────────────────────────────────────────────────
 
 async function loadUsers() {
   const data = await api('GET', '/admin/users');
@@ -533,59 +944,51 @@ function renderUsers() {
       </div>
     </div>
   `).join('');
-
   el.querySelectorAll('.edit-user').forEach(btn => {
     btn.addEventListener('click', () => {
       editingUserId = btn.dataset.id;
       document.getElementById('user-modal-title').textContent = 'Edit User';
       document.getElementById('user-username-field').classList.add('hidden');
-      document.getElementById('user-name').value = btn.dataset.name;
-      document.getElementById('user-role').value = btn.dataset.role;
+      document.getElementById('user-name').value   = btn.dataset.name;
+      document.getElementById('user-role').value   = btn.dataset.role;
       document.getElementById('user-password').value = '';
       document.getElementById('user-password-hint').classList.remove('hidden');
       openModal('user-modal');
     });
   });
-
   el.querySelectorAll('.delete-user').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const username = btn.dataset.id.replace('user:', '');
-      if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
-      await api('DELETE', `/admin/users/${username}`);
+      if (!confirm(`Delete user "${btn.dataset.id.replace('user:', '')}"? This cannot be undone.`)) return;
+      await api('DELETE', `/admin/users/${btn.dataset.id.replace('user:', '')}`);
       await loadUsers();
     });
   });
 }
 
+let editingUserId = null;
+
 document.getElementById('add-user-btn').addEventListener('click', () => {
   editingUserId = null;
   document.getElementById('user-modal-title').textContent = 'Add User';
   document.getElementById('user-username-field').classList.remove('hidden');
-  document.getElementById('user-username').value = '';
-  document.getElementById('user-name').value = '';
+  ['user-username','user-name','user-password'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('user-role').value = 'parent';
-  document.getElementById('user-password').value = '';
   document.getElementById('user-password-hint').classList.add('hidden');
   openModal('user-modal');
 });
-
 document.getElementById('user-cancel').addEventListener('click', () => closeModal('user-modal'));
-
 document.getElementById('user-save').addEventListener('click', async () => {
-  const name = document.getElementById('user-name').value.trim();
-  const role = document.getElementById('user-role').value;
+  const name     = document.getElementById('user-name').value.trim();
+  const role     = document.getElementById('user-role').value;
   const password = document.getElementById('user-password').value;
-
   if (!name) { alert('Display name is required.'); return; }
-
   if (editingUserId) {
-    const username = editingUserId.replace('user:', '');
     const body = { name, role };
     if (password) {
       if (password.length < 8) { alert('Password must be at least 8 characters.'); return; }
       body.password = password;
     }
-    const result = await api('PUT', `/admin/users/${username}`, body);
+    const result = await api('PUT', `/admin/users/${editingUserId.replace('user:', '')}`, body);
     if (result?.error) { alert(result.error); return; }
   } else {
     const username = document.getElementById('user-username').value.trim();
@@ -594,12 +997,10 @@ document.getElementById('user-save').addEventListener('click', async () => {
     const result = await api('POST', '/admin/users', { username, name, role, password });
     if (result?.error) { alert(result.error); return; }
   }
-
-  await loadUsers();
-  closeModal('user-modal');
+  await loadUsers(); closeModal('user-modal');
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 initViewSelect();
-loadEvents();
+loadDashboard();

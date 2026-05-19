@@ -379,3 +379,357 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
   color: var(--muted);
   margin-top: 2px;
 }
+
+/* ── Dashboard ──────────────────────────────────────────────────────────────── */
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.dash-stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.dash-stat-card .card-label { margin-bottom: 4px; }
+.dash-stat-card .card-value { font-size: 1.4rem; }
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.dash-widget {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dash-widget h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* Dashboard task rows */
+.dash-task-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.dash-task-row:last-child { border-bottom: none; }
+.dash-task-row .task-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-task-row .task-due   { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.dash-task-row .task-due.overdue { color: var(--danger); font-weight: 600; }
+
+/* ── Tasks section ──────────────────────────────────────────────────────────── */
+.task-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.filter-select {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.83rem;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.filter-select:focus { border-color: var(--accent); }
+
+.task-list-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .1s;
+}
+.task-row:last-child { border-bottom: none; }
+.task-row:hover { background: var(--bg); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
+
+.task-priority-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 7px;
+}
+.priority-high   { background: var(--danger); }
+.priority-normal { background: var(--accent); }
+.priority-low    { background: var(--muted); }
+
+.task-info { flex: 1; min-width: 0; }
+.task-title-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-title-text.task-done { text-decoration: line-through; color: var(--muted); }
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+.task-meta .task-due   { font-size: 0.75rem; color: var(--muted); }
+.task-meta .task-due.overdue { color: var(--danger); font-weight: 600; }
+.task-meta .task-assignee { font-size: 0.75rem; color: var(--muted); }
+
+.task-project-tag {
+  font-size: 0.7rem;
+  background: #eff6ff;
+  color: var(--accent);
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.task-actions { display: flex; align-items: center; gap: 4px; }
+
+/* Done toggle button */
+.task-done-btn {
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: transparent;
+  flex-shrink: 0;
+  margin-top: 4px;
+  transition: all .15s;
+}
+.task-done-btn.done {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.task-done-btn:hover { border-color: var(--green); }
+
+/* ── Projects section ───────────────────────────────────────────────────────── */
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.project-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: box-shadow .15s;
+}
+.project-card:hover { box-shadow: var(--shadow); }
+
+.project-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.project-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.status-badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 20px;
+  border: 1px solid;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.status-active   { background: #dcfce7; border-color: #86efac; color: #166534; }
+.status-paused   { background: #fef9c3; border-color: #fde047; color: #854d0e; }
+.status-complete { background: #f1f5f9; border-color: #cbd5e1; color: var(--muted); }
+
+.project-desc {
+  font-size: 0.83rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.project-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.project-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* ── Budget Categories ──────────────────────────────────────────────────────── */
+.budget-cat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.budget-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.budget-cat-row:last-child { border-bottom: none; }
+
+.budget-cat-info {
+  min-width: 100px;
+  max-width: 140px;
+}
+.budget-cat-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.budget-cat-bar-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+/* reuse .goal-bar / .goal-fill for the bar itself;
+   over-budget class is placed on the fill element by app.js */
+.goal-fill.over-budget { background: var(--danger); }
+
+.budget-cat-amounts {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.budget-cat-row.over-budget .budget-cat-amounts { color: var(--danger); }
+
+.budget-cat-actions { display: flex; gap: 4px; }
+
+/* ── Notes widget ───────────────────────────────────────────────────────────── */
+.note-add-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.note-add-row input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color .15s;
+}
+.note-add-row input:focus { border-color: var(--accent); }
+
+.note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.note-item:last-child { border-bottom: none; }
+
+.note-text {
+  flex: 1;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.note-author {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* ── Utility helpers ────────────────────────────────────────────────────────── */
+.text-danger { color: var(--danger); }
+.text-muted  { color: var(--muted); }
+.text-green  { color: var(--green); }
+
+/* ── Modal extras (textarea, field-group) ───────────────────────────────────── */
+.modal label textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  min-height: 70px;
+  transition: border-color .15s;
+}
+.modal label textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+
+.field-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.field-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+/* ── Phase 4 responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .dash-stats { grid-template-columns: repeat(3, 1fr); }
+  .dash-grid  { grid-template-columns: 1fr; }
+  .projects-grid { grid-template-columns: 1fr 1fr; }
+  .field-group { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .dash-stats { grid-template-columns: 1fr 1fr; }
+  .projects-grid { grid-template-columns: 1fr; }
+  .task-filters { gap: 6px; }
+  .filter-select { font-size: 0.8rem; }
+}

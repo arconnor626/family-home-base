@@ -2,6 +2,10 @@ import { handleAuth } from './routes/auth.js';
 import { handleAdmin } from './routes/admin.js';
 import { handleSchedule } from './routes/schedule.js';
 import { handleFinance } from './routes/finance.js';
+import { handleBudgetCategories } from './routes/budgetCategories.js';
+import { handleTasks } from './routes/tasks.js';
+import { handleProjects } from './routes/projects.js';
+import { handleNotes } from './routes/notes.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -16,7 +20,11 @@ export default {
       (await handleAuth(request, env, url.pathname)) ??
       (await handleAdmin(request, env, url.pathname)) ??
       (await handleSchedule(request, env, url.pathname)) ??
+      (await handleBudgetCategories(request, env, url.pathname)) ??
       (await handleFinance(request, env, url.pathname)) ??
+      (await handleTasks(request, env, url.pathname)) ??
+      (await handleProjects(request, env, url.pathname)) ??
+      (await handleNotes(request, env, url.pathname)) ??
       new Response('Not Found', { status: 404 });
 
     return withCors(response, origin);
