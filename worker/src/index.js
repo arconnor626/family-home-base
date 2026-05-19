@@ -6,6 +6,7 @@ import { handleBudgetCategories } from './routes/budgetCategories.js';
 import { handleTasks } from './routes/tasks.js';
 import { handleProjects } from './routes/projects.js';
 import { handleNotes } from './routes/notes.js';
+import { handleIntegrations } from './routes/integrations.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -25,6 +26,7 @@ export default {
       (await handleTasks(request, env, url.pathname)) ??
       (await handleProjects(request, env, url.pathname)) ??
       (await handleNotes(request, env, url.pathname)) ??
+      (await handleIntegrations(request, env, url.pathname)) ??
       new Response('Not Found', { status: 404 });
 
     return withCors(response, origin);

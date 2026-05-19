@@ -88,6 +88,8 @@
           <button class="btn-primary btn-sm" id="add-event-btn">+ Add Event</button>
         </div>
       </div>
+      <!-- Google Calendar connection banner -->
+      <div id="gcal-banner" class="integration-banner hidden"></div>
       <div class="calendar-grid" id="calendar-grid"></div>
       <div class="today-panel">
         <h3>Today's Events</h3>
@@ -100,6 +102,7 @@
       <div class="section-header">
         <h2>Family Finances</h2>
         <div class="header-actions">
+          <button class="btn-secondary btn-sm" id="import-csv-btn">Import CSV</button>
           <button class="btn-secondary btn-sm" id="manual-entry-btn">+ Manual Entry</button>
         </div>
       </div>
@@ -372,6 +375,35 @@
       <div class="modal-actions">
         <button class="btn-secondary" id="bc-cancel">Cancel</button>
         <button class="btn-primary" id="bc-save">Save</button>
+      </div>
+    </div>
+
+    <!-- CSV Transaction Import -->
+    <div class="modal hidden" id="csv-modal" style="max-width:560px">
+      <h3>Import Transactions from CSV</h3>
+      <p class="field-hint" style="margin-bottom:12px">Supports Chase, Bank of America, and generic CSV formats. The first row must be headers.</p>
+      <label>Select CSV file
+        <input type="file" id="csv-file" accept=".csv" />
+      </label>
+      <div id="csv-preview" class="hidden">
+        <p id="csv-format-label" class="field-hint" style="margin:8px 0"></p>
+        <div id="csv-table-wrap" style="overflow-x:auto; max-height:200px; overflow-y:auto; margin-bottom:12px"></div>
+        <label>Account (optional)
+          <select id="csv-account-select">
+            <option value="">— No account —</option>
+          </select>
+        </label>
+        <label>Visibility
+          <select id="csv-visibility">
+            <option value="shared">Shared – everyone can see</option>
+            <option value="private">Private – only me</option>
+          </select>
+        </label>
+        <p id="csv-count-label" class="field-hint" style="margin-top:8px"></p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="csv-cancel">Cancel</button>
+        <button class="btn-primary hidden" id="csv-import-btn">Import</button>
       </div>
     </div>
 

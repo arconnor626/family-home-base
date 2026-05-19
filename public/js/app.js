@@ -147,7 +147,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 // ── Modal helpers ─────────────────────────────────────────────────────────────
 
 const overlay = document.getElementById('modal-overlay');
-const ALL_MODALS = ['event-modal','goal-modal','manual-modal','task-modal','project-modal','budget-cat-modal','user-modal'];
+const ALL_MODALS = ['event-modal','goal-modal','manual-modal','task-modal','project-modal','budget-cat-modal','user-modal','csv-modal'];
 
 function openModal(id)  { overlay.classList.remove('hidden'); document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { overlay.classList.add('hidden');    document.getElementById(id).classList.add('hidden'); }
@@ -304,6 +304,7 @@ async function loadSchedule() {
   await ensureEvents();
   renderCalendar();
   renderToday();
+  loadGoogleCalStatus(); // fire-and-forget banner load
 }
 
 function weekStart(offset) {
@@ -1000,7 +1001,286 @@ document.getElementById('user-save').addEventListener('click', async () => {
   await loadUsers(); closeModal('user-modal');
 });
 
+// ── GOOGLE CALENDAR INTEGRATION ───────────────────────────────────────────────
+
+async function loadGoogleCalStatus() {
+  const el = document.getElementById('gcal-banner');
+  try {
+    const status = await api('GET', '/integrations/google/status');
+    renderGcalBanner(el, status);
+  } catch {
+    el.classList.add('hidden');
+  }
+}
+
+function renderGcalBanner(el, status) {
+  el.classList.remove('hidden');
+  if (!status.connected) {
+    el.innerHTML = `
+      <div class="integration-status disconnected">
+        <span>📅 Connect Google Calendar to sync events automatically.</span>
+        <button class="btn-primary btn-sm" id="gcal-connect-btn">Connect Google Calendar</button>
+      </div>`;
+    el.querySelector('#gcal-connect-btn').addEventListener('click', connectGoogleCal);
+    return;
+  }
+  const lastSync = status.lastSync
+    ? new Date(status.lastSync).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : 'Never';
+  el.innerHTML = `
+    <div class="integration-status connected">
+      <span>✅ Google Calendar connected · Last sync: ${lastSync}</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary btn-sm" id="gcal-sync-btn">Sync Now</button>
+        <button class="btn-secondary btn-sm" id="gcal-disconnect-btn">Disconnect</button>
+      </div>
+    </div>`;
+  el.querySelector('#gcal-sync-btn').addEventListener('click', () => syncGoogleCal(el));
+  el.querySelector('#gcal-disconnect-btn').addEventListener('click', () => disconnectGoogleCal(el));
+}
+
+async function connectGoogleCal() {
+  const data = await api('GET', '/integrations/google/auth');
+  if (data?.error) { alert(data.error); return; }
+  if (data?.authUrl) window.location.href = data.authUrl;
+}
+
+async function syncGoogleCal(bannerEl) {
+  const btn = bannerEl.querySelector('#gcal-sync-btn');
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  const result = await api('POST', '/integrations/google/sync');
+  if (result?.error) {
+    alert(result.error);
+    btn.disabled = false;
+    btn.textContent = 'Sync Now';
+    return;
+  }
+  // Reload events from server so the calendar reflects synced data
+  eventsLoaded = false;
+  await ensureEvents();
+  renderCalendar();
+  renderToday();
+  // Refresh the banner to show updated lastSync time
+  const status = await api('GET', '/integrations/google/status');
+  renderGcalBanner(bannerEl, status);
+  showToast(`Synced ${result.synced} event${result.synced !== 1 ? 's' : ''} from Google Calendar.`);
+}
+
+async function disconnectGoogleCal(bannerEl) {
+  if (!confirm('Disconnect Google Calendar? Synced events will remain but no new syncs will occur.')) return;
+  await api('DELETE', '/integrations/google/disconnect');
+  renderGcalBanner(bannerEl, { connected: false });
+}
+
+// ── CSV TRANSACTION IMPORT ────────────────────────────────────────────────────
+
+let csvParsedRows = [];
+
+document.getElementById('import-csv-btn').addEventListener('click', () => {
+  csvParsedRows = [];
+  document.getElementById('csv-file').value = '';
+  document.getElementById('csv-preview').classList.add('hidden');
+  document.getElementById('csv-import-btn').classList.add('hidden');
+  // Populate account select
+  const sel = document.getElementById('csv-account-select');
+  sel.innerHTML = '<option value="">— No account —</option>' +
+    allAccounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  openModal('csv-modal');
+});
+
+document.getElementById('csv-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => parseCsvFile(ev.target.result);
+  reader.readAsText(file);
+});
+
+function parseCsvFile(text) {
+  // Normalise line endings, split rows
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n');
+  if (lines.length < 2) { alert('CSV file appears empty or has no data rows.'); return; }
+
+  const headers = parseCsvRow(lines[0]).map(h => h.trim().toLowerCase());
+
+  // Detect format by column headers
+  let format = 'generic';
+  if (headers.includes('transaction date') && headers.includes('post date')) format = 'chase';
+  else if (headers.includes('posted date') && headers.includes('payee'))    format = 'bofa';
+  else if (headers.includes('transaction type') && headers.includes('original description')) format = 'mint';
+
+  const formatLabels = {
+    chase:   'Chase format detected',
+    bofa:    'Bank of America format detected',
+    mint:    'Mint / Tiller format detected',
+    generic: 'Generic CSV — mapped by column name',
+  };
+
+  // Column index finders
+  const col = name => headers.indexOf(name);
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = parseCsvRow(lines[i]);
+    if (cells.every(c => !c.trim())) continue; // skip blank rows
+
+    let date, description, amount, type, category;
+
+    if (format === 'chase') {
+      date        = cells[col('transaction date')]?.trim() ?? '';
+      description = cells[col('description')]?.trim()      ?? '';
+      const raw   = parseFloat(cells[col('amount')]?.trim() ?? '0');
+      amount      = Math.abs(raw);
+      type        = raw < 0 ? 'debit' : 'credit';
+      category    = cells[col('category')]?.trim() ?? '';
+    } else if (format === 'bofa') {
+      date        = cells[col('posted date')]?.trim() ?? '';
+      description = cells[col('payee')]?.trim()       ?? '';
+      const raw   = parseFloat(cells[col('amount')]?.trim() ?? '0');
+      amount      = Math.abs(raw);
+      type        = raw < 0 ? 'debit' : 'credit';
+      category    = '';
+    } else if (format === 'mint') {
+      date        = cells[col('date')]?.trim()              ?? '';
+      description = cells[col('description')]?.trim()       ?? '';
+      amount      = Math.abs(parseFloat(cells[col('amount')]?.trim() ?? '0'));
+      const txType = cells[col('transaction type')]?.trim().toLowerCase() ?? '';
+      type        = txType === 'credit' ? 'credit' : 'debit';
+      category    = cells[col('category')]?.trim() ?? '';
+    } else {
+      // Generic: look for common column names
+      const dateIdx = col('date') >= 0 ? col('date') : col('transaction date') >= 0 ? col('transaction date') : 0;
+      const descIdx = col('description') >= 0 ? col('description') : col('memo') >= 0 ? col('memo') : 1;
+      const amtIdx  = col('amount') >= 0 ? col('amount') : 2;
+      date        = cells[dateIdx]?.trim() ?? '';
+      description = cells[descIdx]?.trim() ?? '';
+      const raw   = parseFloat(cells[amtIdx]?.trim() ?? '0');
+      amount      = Math.abs(raw);
+      type        = raw < 0 ? 'debit' : 'credit';
+      category    = col('category') >= 0 ? (cells[col('category')]?.trim() ?? '') : '';
+    }
+
+    // Normalise date to YYYY-MM-DD
+    const parsedDate = normaliseDate(date);
+    if (!parsedDate || isNaN(amount)) continue;
+
+    rows.push({ date: parsedDate, description, amount, type, category });
+  }
+
+  csvParsedRows = rows;
+
+  // Render preview
+  document.getElementById('csv-format-label').textContent = formatLabels[format];
+  const preview = rows.slice(0, 5);
+  document.getElementById('csv-table-wrap').innerHTML = `
+    <table class="csv-preview-table">
+      <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Type</th><th>Category</th></tr></thead>
+      <tbody>${preview.map(r => `
+        <tr>
+          <td>${r.date}</td>
+          <td>${r.description}</td>
+          <td>${fmt(r.amount)}</td>
+          <td>${r.type}</td>
+          <td>${r.category}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  document.getElementById('csv-count-label').textContent =
+    `${rows.length} transaction${rows.length !== 1 ? 's' : ''} ready to import${rows.length > 5 ? ' (showing first 5)' : ''}.`;
+  document.getElementById('csv-preview').classList.remove('hidden');
+  document.getElementById('csv-import-btn').classList.remove('hidden');
+}
+
+function parseCsvRow(line) {
+  // Handle quoted fields with commas inside
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (ch === ',' && !inQ) {
+      result.push(cur); cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function normaliseDate(str) {
+  if (!str) return null;
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  // MM/DD/YYYY or M/D/YYYY
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  return null;
+}
+
+document.getElementById('csv-import-btn').addEventListener('click', async () => {
+  if (!csvParsedRows.length) return;
+  const visibility = document.getElementById('csv-visibility').value;
+  const btn = document.getElementById('csv-import-btn');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+
+  let imported = 0;
+  for (const row of csvParsedRows) {
+    const created = await api('POST', '/finance/transactions', {
+      date:        row.date,
+      description: row.description,
+      amount:      row.amount,
+      type:        row.type,
+      category:    row.category,
+      visibility,
+    });
+    if (created && !created.error) {
+      allTransactions.unshift(created);
+      imported++;
+    }
+  }
+
+  closeModal('csv-modal');
+  renderTransactions();
+  await refreshSummary();
+  showToast(`Imported ${imported} transaction${imported !== 1 ? 's' : ''}.`);
+});
+
+document.getElementById('csv-cancel').addEventListener('click', () => closeModal('csv-modal'));
+
+// ── Toast notification ────────────────────────────────────────────────────────
+
+function showToast(message, duration = 3500) {
+  let toast = document.getElementById('app-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'app-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add('visible');
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => toast.classList.remove('visible'), duration);
+}
+
+// ── Handle OAuth return params ────────────────────────────────────────────────
+
+function handleOAuthReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const google = params.get('google');
+  if (!google) return;
+  // Clean the URL
+  window.history.replaceState({}, '', window.location.pathname);
+  if (google === 'connected') showToast('Google Calendar connected! Go to Schedule → Sync Now to import events.');
+  if (google === 'error')     showToast(`Google Calendar connection failed: ${params.get('reason') ?? 'unknown error'}.`);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
+handleOAuthReturn();
 initViewSelect();
 loadDashboard();
