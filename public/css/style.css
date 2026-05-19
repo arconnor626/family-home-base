@@ -325,3 +325,59 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
   main { padding: 12px; }
   #current-date { display: none; }
 }
+
+/* ── View toggle ────────────────────────────────────────────────────────────── */
+.view-toggle {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  gap: 2px;
+}
+.toggle-view-btn {
+  padding: 3px 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all .15s;
+  white-space: nowrap;
+}
+.toggle-view-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+/* ── Private badge ──────────────────────────────────────────────────────────── */
+.private-badge {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+/* ── Admin user list ────────────────────────────────────────────────────────── */
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.user-row:last-child { border-bottom: none; }
+.user-info { flex: 1; }
+.user-info strong { display: block; font-size: 0.9rem; }
+.user-meta { font-size: 0.78rem; color: var(--muted); }
+.user-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ── Field hint (modal password hint) ──────────────────────────────────────── */
+.field-hint {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 2px;
+}

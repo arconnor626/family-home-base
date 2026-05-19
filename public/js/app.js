@@ -3,7 +3,7 @@ import { requireAuth, logout, getToken } from '/js/auth.js';
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
 const user = await requireAuth();
-if (!user) throw new Error('not authenticated'); // requireAuth redirects
+if (!user) throw new Error('not authenticated');
 
 const WORKER_URL = (() => {
   const h = window.location.hostname;
@@ -29,9 +29,56 @@ async function api(method, path, body) {
 
 document.getElementById('user-greeting').textContent = `Hi, ${user.name}`;
 document.getElementById('logout-btn').addEventListener('click', logout);
+document.getElementById('current-date').textContent =
+  new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-const dateEl = document.getElementById('current-date');
-dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+if (user.role === 'admin') {
+  document.getElementById('admin-nav-btn').classList.remove('hidden');
+}
+
+// ── View toggle ───────────────────────────────────────────────────────────────
+
+let viewMode = 'family';
+
+document.querySelectorAll('.toggle-view-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    viewMode = btn.dataset.view;
+    document.querySelectorAll('.toggle-view-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderCalendar();
+    renderToday();
+    if (financeLoaded) {
+      renderAccounts();
+      renderTransactions();
+      renderGoals();
+    }
+  });
+});
+
+// ── View filters ──────────────────────────────────────────────────────────────
+
+function visibleEvents() {
+  return viewMode === 'individual'
+    ? allEvents.filter(e => e.owner === user.id)
+    : allEvents.filter(e => e.visibility === 'shared');
+}
+
+function visibleAccounts() {
+  return viewMode === 'individual'
+    ? allAccounts.filter(a => a.owner === user.id)
+    : allAccounts.filter(a => a.visibility === 'shared');
+}
+
+function visibleTransactions() {
+  return viewMode === 'individual'
+    ? allTransactions.filter(t => t.owner === user.id)
+    : allTransactions.filter(t => t.visibility === 'shared');
+}
+
+function visibleGoals() {
+  return viewMode === 'individual'
+    ? allGoals.filter(g => g.owner === user.id)
+    : allGoals.filter(g => g.visibility === 'shared');
+}
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
@@ -40,9 +87,9 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
     btn.classList.add('active');
-    const section = document.getElementById(btn.dataset.section);
-    section.classList.add('active');
+    document.getElementById(btn.dataset.section).classList.add('active');
     if (btn.dataset.section === 'finance') loadFinance();
+    if (btn.dataset.section === 'admin') loadUsers();
   });
 });
 
@@ -62,12 +109,16 @@ function closeModal(id) {
 
 overlay.addEventListener('click', e => {
   if (e.target === overlay) {
-    ['event-modal', 'goal-modal', 'manual-modal'].forEach(closeModal);
+    ['event-modal', 'goal-modal', 'manual-modal', 'user-modal'].forEach(closeModal);
   }
 });
 
 function fmt(n) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+}
+
+function privateBadge(record) {
+  return record.visibility === 'private' ? '<span class="badge private-badge">private</span>' : '';
 }
 
 // ── SCHEDULE ──────────────────────────────────────────────────────────────────
@@ -97,8 +148,6 @@ function toDateStr(d) {
 function renderCalendar() {
   const grid = document.getElementById('calendar-grid');
   const start = weekStart(weekOffset);
-
-  // Week label
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
   document.getElementById('week-label').textContent =
@@ -111,10 +160,11 @@ function renderCalendar() {
   });
 
   const todayStr = toDateStr(new Date());
+  const events = visibleEvents();
 
   grid.innerHTML = days.map(day => {
     const dateStr = toDateStr(day);
-    const dayEvents = allEvents.filter(e => e.date === dateStr);
+    const dayEvents = events.filter(e => e.date === dateStr);
     const isToday = dateStr === todayStr;
     return `
       <div class="cal-day ${isToday ? 'today' : ''}">
@@ -127,7 +177,8 @@ function renderCalendar() {
             <div class="cal-event" data-id="${e.id}">
               ${e.allDay ? '' : `<span class="event-time">${e.time || ''}</span>`}
               <span class="event-title">${e.title}</span>
-              <button class="event-delete" data-id="${e.id}" title="Delete">×</button>
+              ${privateBadge(e)}
+              <button class="event-delete btn-icon" data-id="${e.id}" title="Delete">×</button>
             </div>
           `).join('')}
         </div>
@@ -148,7 +199,7 @@ function renderCalendar() {
 
 function renderToday() {
   const todayStr = toDateStr(new Date());
-  const todayEvents = allEvents
+  const todayEvents = visibleEvents()
     .filter(e => e.date === todayStr)
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   const el = document.getElementById('today-events');
@@ -161,6 +212,7 @@ function renderToday() {
       <span class="event-dot"></span>
       <div>
         <strong>${e.title}</strong>
+        ${privateBadge(e)}
         ${e.allDay ? '<span class="badge">all day</span>' : (e.time ? `<span class="event-time">${e.time}${e.endTime ? ' – ' + e.endTime : ''}</span>` : '')}
         ${e.description ? `<div class="event-desc">${e.description}</div>` : ''}
       </div>
@@ -168,11 +220,9 @@ function renderToday() {
   `).join('');
 }
 
-// Week nav
 document.getElementById('prev-week').addEventListener('click', () => { weekOffset--; renderCalendar(); });
 document.getElementById('next-week').addEventListener('click', () => { weekOffset++; renderCalendar(); });
 
-// Add event modal
 let editingEventId = null;
 
 document.getElementById('add-event-btn').addEventListener('click', () => {
@@ -185,6 +235,7 @@ document.getElementById('add-event-btn').addEventListener('click', () => {
   document.getElementById('event-time').value = '';
   document.getElementById('event-end-time').value = '';
   document.getElementById('event-description').value = '';
+  document.getElementById('event-visibility').value = 'shared';
   openModal('event-modal');
 });
 
@@ -201,12 +252,11 @@ document.getElementById('event-save').addEventListener('click', async () => {
 
   const allDay = document.getElementById('event-allday').checked;
   const body = {
-    title,
-    date,
-    allDay,
+    title, date, allDay,
     time: allDay ? null : (document.getElementById('event-time').value || null),
     endTime: allDay ? null : (document.getElementById('event-end-time').value || null),
     description: document.getElementById('event-description').value.trim(),
+    visibility: document.getElementById('event-visibility').value,
   };
 
   if (editingEventId) {
@@ -258,11 +308,12 @@ function renderSummary(s) {
 
 function renderAccounts() {
   const el = document.getElementById('accounts-list');
-  if (!allAccounts.length) { el.innerHTML = '<p class="empty-msg">No accounts yet.</p>'; return; }
-  el.innerHTML = allAccounts.map(a => `
+  const accounts = visibleAccounts();
+  if (!accounts.length) { el.innerHTML = '<p class="empty-msg">No accounts yet.</p>'; return; }
+  el.innerHTML = accounts.map(a => `
     <div class="account-card">
       <div class="account-info">
-        <strong>${a.name}</strong>
+        <strong>${a.name} ${privateBadge(a)}</strong>
         <span class="account-meta">${a.institution || ''} · ${a.type}</span>
       </div>
       <div class="account-balance ${a.type === 'credit' || a.type === 'loan' ? 'negative' : ''}">${fmt(a.balance)}</div>
@@ -283,25 +334,27 @@ function renderAccounts() {
 function renderTransactions() {
   const search = document.getElementById('tx-search').value.toLowerCase();
   const cat = document.getElementById('tx-category-filter').value;
-  const filtered = allTransactions.filter(t =>
+  const base = visibleTransactions();
+  const filtered = base.filter(t =>
     (!search || t.description.toLowerCase().includes(search)) &&
     (!cat || t.category === cat)
   );
-  const el = document.getElementById('transactions-list');
-  if (!filtered.length) { el.innerHTML = '<p class="empty-msg">No transactions.</p>'; return; }
 
-  // Rebuild category filter options
-  const cats = [...new Set(allTransactions.map(t => t.category).filter(Boolean))].sort();
+  // Rebuild category options from current visible set
+  const cats = [...new Set(base.map(t => t.category).filter(Boolean))].sort();
   const catFilter = document.getElementById('tx-category-filter');
   const currentCat = catFilter.value;
   catFilter.innerHTML = '<option value="">All categories</option>' +
     cats.map(c => `<option value="${c}" ${c === currentCat ? 'selected' : ''}>${c}</option>`).join('');
 
+  const el = document.getElementById('transactions-list');
+  if (!filtered.length) { el.innerHTML = '<p class="empty-msg">No transactions.</p>'; return; }
+
   el.innerHTML = filtered.slice(0, 50).map(t => `
     <div class="tx-row">
       <span class="tx-date">${t.date}</span>
       <div class="tx-desc">
-        <span>${t.description}</span>
+        <span>${t.description} ${privateBadge(t)}</span>
         ${t.category ? `<span class="tx-cat">${t.category}</span>` : ''}
       </div>
       <span class="tx-amount ${t.type === 'credit' ? 'income' : 'expense'}">
@@ -326,13 +379,14 @@ document.getElementById('tx-category-filter').addEventListener('change', renderT
 
 function renderGoals() {
   const el = document.getElementById('goals-list');
-  if (!allGoals.length) { el.innerHTML = '<p class="empty-msg">No goals yet.</p>'; return; }
-  el.innerHTML = allGoals.map(g => {
+  const goals = visibleGoals();
+  if (!goals.length) { el.innerHTML = '<p class="empty-msg">No goals yet.</p>'; return; }
+  el.innerHTML = goals.map(g => {
     const pct = g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0;
     return `
       <div class="goal-card">
         <div class="goal-header">
-          <strong>${g.name}</strong>
+          <span><strong>${g.name}</strong> ${privateBadge(g)}</span>
           <span>${pct.toFixed(0)}%</span>
         </div>
         <div class="goal-bar"><div class="goal-fill" style="width:${pct}%"></div></div>
@@ -364,6 +418,7 @@ document.getElementById('add-goal-btn').addEventListener('click', () => {
   document.getElementById('goal-current').value = '0';
   document.getElementById('goal-category').value = '';
   document.getElementById('goal-date').value = '';
+  document.getElementById('goal-visibility').value = 'shared';
   openModal('goal-modal');
 });
 document.getElementById('goal-cancel').addEventListener('click', () => closeModal('goal-modal'));
@@ -372,11 +427,11 @@ document.getElementById('goal-save').addEventListener('click', async () => {
   const target = parseFloat(document.getElementById('goal-target').value);
   if (!name || isNaN(target)) { alert('Name and target amount are required.'); return; }
   const created = await api('POST', '/finance/goals', {
-    name,
-    target,
+    name, target,
     current: parseFloat(document.getElementById('goal-current').value) || 0,
     category: document.getElementById('goal-category').value.trim(),
     targetDate: document.getElementById('goal-date').value || null,
+    visibility: document.getElementById('goal-visibility').value,
   });
   allGoals.push(created);
   closeModal('goal-modal');
@@ -392,7 +447,7 @@ document.getElementById('manual-entry-btn').addEventListener('click', () => {
   document.getElementById('manual-acct-name').value = '';
   document.getElementById('manual-acct-inst').value = '';
   document.getElementById('manual-acct-balance').value = '';
-  // Default to transaction tab
+  document.getElementById('manual-visibility').value = 'shared';
   document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('.toggle-btn[data-type="transaction"]').classList.add('active');
   document.getElementById('manual-tx-fields').classList.remove('hidden');
@@ -413,13 +468,14 @@ document.querySelectorAll('.toggle-btn').forEach(btn => {
 document.getElementById('manual-cancel').addEventListener('click', () => closeModal('manual-modal'));
 document.getElementById('manual-save').addEventListener('click', async () => {
   const isTx = document.querySelector('.toggle-btn.active').dataset.type === 'transaction';
+  const visibility = document.getElementById('manual-visibility').value;
   if (isTx) {
     const date = document.getElementById('manual-date').value;
     const description = document.getElementById('manual-desc').value.trim();
     const amount = parseFloat(document.getElementById('manual-amount').value);
     if (!date || !description || isNaN(amount)) { alert('Date, description, and amount are required.'); return; }
     const created = await api('POST', '/finance/transactions', {
-      date, description, amount,
+      date, description, amount, visibility,
       type: document.getElementById('manual-type').value,
       category: document.getElementById('manual-category').value.trim(),
     });
@@ -431,7 +487,7 @@ document.getElementById('manual-save').addEventListener('click', async () => {
     const balance = parseFloat(document.getElementById('manual-acct-balance').value);
     if (!name || isNaN(balance)) { alert('Account name and balance are required.'); return; }
     const created = await api('POST', '/finance/accounts', {
-      name, balance,
+      name, balance, visibility,
       institution: document.getElementById('manual-acct-inst').value.trim(),
       type: document.getElementById('manual-acct-type').value,
     });
@@ -440,8 +496,101 @@ document.getElementById('manual-save').addEventListener('click', async () => {
     refreshSummary();
   }
   closeModal('manual-modal');
-  financeLoaded = false; // allow re-fetch on next visit to keep summary accurate
-  financeLoaded = true;
+});
+
+// ── ADMIN ─────────────────────────────────────────────────────────────────────
+
+let allUsers = [];
+let editingUserId = null;
+
+async function loadUsers() {
+  const data = await api('GET', '/admin/users');
+  allUsers = Array.isArray(data) ? data : [];
+  renderUsers();
+}
+
+function renderUsers() {
+  const el = document.getElementById('users-list');
+  if (!allUsers.length) { el.innerHTML = '<p class="empty-msg">No users found.</p>'; return; }
+  el.innerHTML = allUsers.map(u => `
+    <div class="user-row">
+      <div class="user-info">
+        <strong>${u.name}</strong>
+        <span class="user-meta">${u.id.replace('user:', '@')} · ${u.role}</span>
+      </div>
+      <div class="user-actions">
+        <button class="btn-secondary btn-sm edit-user"
+          data-id="${u.id}" data-name="${u.name}" data-role="${u.role}">Edit</button>
+        ${u.id !== user.id
+          ? `<button class="btn-icon delete-user" data-id="${u.id}" title="Delete">×</button>`
+          : '<span class="user-meta">(you)</span>'}
+      </div>
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.edit-user').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editingUserId = btn.dataset.id;
+      document.getElementById('user-modal-title').textContent = 'Edit User';
+      document.getElementById('user-username-field').classList.add('hidden');
+      document.getElementById('user-name').value = btn.dataset.name;
+      document.getElementById('user-role').value = btn.dataset.role;
+      document.getElementById('user-password').value = '';
+      document.getElementById('user-password-hint').classList.remove('hidden');
+      openModal('user-modal');
+    });
+  });
+
+  el.querySelectorAll('.delete-user').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const username = btn.dataset.id.replace('user:', '');
+      if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+      await api('DELETE', `/admin/users/${username}`);
+      await loadUsers();
+    });
+  });
+}
+
+document.getElementById('add-user-btn').addEventListener('click', () => {
+  editingUserId = null;
+  document.getElementById('user-modal-title').textContent = 'Add User';
+  document.getElementById('user-username-field').classList.remove('hidden');
+  document.getElementById('user-username').value = '';
+  document.getElementById('user-name').value = '';
+  document.getElementById('user-role').value = 'parent';
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-password-hint').classList.add('hidden');
+  openModal('user-modal');
+});
+
+document.getElementById('user-cancel').addEventListener('click', () => closeModal('user-modal'));
+
+document.getElementById('user-save').addEventListener('click', async () => {
+  const name = document.getElementById('user-name').value.trim();
+  const role = document.getElementById('user-role').value;
+  const password = document.getElementById('user-password').value;
+
+  if (!name) { alert('Display name is required.'); return; }
+
+  if (editingUserId) {
+    const username = editingUserId.replace('user:', '');
+    const body = { name, role };
+    if (password) {
+      if (password.length < 8) { alert('Password must be at least 8 characters.'); return; }
+      body.password = password;
+    }
+    const result = await api('PUT', `/admin/users/${username}`, body);
+    if (result?.error) { alert(result.error); return; }
+  } else {
+    const username = document.getElementById('user-username').value.trim();
+    if (!username) { alert('Username is required.'); return; }
+    if (!password || password.length < 8) { alert('Password must be at least 8 characters.'); return; }
+    const result = await api('POST', '/admin/users', { username, name, role, password });
+    if (result?.error) { alert(result.error); return; }
+  }
+
+  await loadUsers();
+  closeModal('user-modal');
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

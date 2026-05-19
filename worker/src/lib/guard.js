@@ -15,6 +15,10 @@ export function unauthorized() {
   return Response.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
+export function forbidden() {
+  return Response.json({ error: 'Forbidden' }, { status: 403 });
+}
+
 export function notFound() {
   return Response.json({ error: 'Not found' }, { status: 404 });
 }

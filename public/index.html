@@ -15,8 +15,13 @@
     <nav class="app-nav">
       <button class="nav-btn active" data-section="schedule">Schedule</button>
       <button class="nav-btn" data-section="finance">Finance</button>
+      <button class="nav-btn hidden" id="admin-nav-btn" data-section="admin">Admin</button>
     </nav>
     <div class="header-right">
+      <div class="view-toggle">
+        <button class="toggle-view-btn active" data-view="family">Family</button>
+        <button class="toggle-view-btn" data-view="individual">Mine</button>
+      </div>
       <span id="user-greeting"></span>
       <button id="logout-btn" class="btn-secondary btn-sm">Sign out</button>
     </div>
@@ -113,6 +118,17 @@
       </div>
     </section>
 
+    <!-- ── ADMIN ──────────────────────────────────────────────────── -->
+    <section id="admin" class="section">
+      <div class="section-header">
+        <h2>User Management</h2>
+        <button class="btn-primary btn-sm" id="add-user-btn">+ Add User</button>
+      </div>
+      <div class="finance-panel">
+        <div id="users-list"><p class="empty-msg">Loading…</p></div>
+      </div>
+    </section>
+
   </main>
 
   <!-- ── MODALS ────────────────────────────────────────────────────── -->
@@ -129,6 +145,12 @@
         <label>End time <input type="time" id="event-end-time" /></label>
       </div>
       <label>Description <input type="text" id="event-description" placeholder="Optional" /></label>
+      <label>Visibility
+        <select id="event-visibility">
+          <option value="shared">Shared – everyone can see</option>
+          <option value="private">Private – only me</option>
+        </select>
+      </label>
       <div class="modal-actions">
         <button class="btn-secondary" id="event-cancel">Cancel</button>
         <button class="btn-primary" id="event-save">Save</button>
@@ -143,6 +165,12 @@
       <label>Current amount <input type="number" id="goal-current" placeholder="0" min="0" /></label>
       <label>Category <input type="text" id="goal-category" placeholder="e.g. Travel (optional)" /></label>
       <label>Target date <input type="date" id="goal-date" /></label>
+      <label>Visibility
+        <select id="goal-visibility">
+          <option value="shared">Shared – everyone can see</option>
+          <option value="private">Private – only me</option>
+        </select>
+      </label>
       <div class="modal-actions">
         <button class="btn-secondary" id="goal-cancel">Cancel</button>
         <button class="btn-primary" id="goal-save">Save Goal</button>
@@ -184,9 +212,42 @@
         </label>
       </div>
 
+      <label>Visibility
+        <select id="manual-visibility">
+          <option value="shared">Shared – everyone can see</option>
+          <option value="private">Private – only me</option>
+        </select>
+      </label>
+
       <div class="modal-actions">
         <button class="btn-secondary" id="manual-cancel">Cancel</button>
         <button class="btn-primary" id="manual-save">Save</button>
+      </div>
+    </div>
+
+    <!-- Add / Edit User (admin only) -->
+    <div class="modal hidden" id="user-modal">
+      <h3 id="user-modal-title">Add User</h3>
+      <div id="user-username-field">
+        <label>Username <input type="text" id="user-username" placeholder="letters, numbers, _ or - (e.g. emma)" /></label>
+      </div>
+      <label>Display name <input type="text" id="user-name" placeholder="e.g. Emma" /></label>
+      <label>Role
+        <select id="user-role">
+          <option value="parent">Parent</option>
+          <option value="child">Child</option>
+          <option value="guest">Guest</option>
+          <option value="admin">Admin</option>
+        </select>
+      </label>
+      <label>
+        Password
+        <input type="password" id="user-password" placeholder="Min 8 characters" />
+        <span id="user-password-hint" class="hidden field-hint">Leave blank to keep current password</span>
+      </label>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="user-cancel">Cancel</button>
+        <button class="btn-primary" id="user-save">Save</button>
       </div>
     </div>
 

@@ -1,4 +1,5 @@
 import { handleAuth } from './routes/auth.js';
+import { handleAdmin } from './routes/admin.js';
 import { handleSchedule } from './routes/schedule.js';
 import { handleFinance } from './routes/finance.js';
 
@@ -13,6 +14,7 @@ export default {
 
     let response =
       (await handleAuth(request, env, url.pathname)) ??
+      (await handleAdmin(request, env, url.pathname)) ??
       (await handleSchedule(request, env, url.pathname)) ??
       (await handleFinance(request, env, url.pathname)) ??
       new Response('Not Found', { status: 404 });
