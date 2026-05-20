@@ -17,6 +17,12 @@ export default {
       return corsPreflightResponse(origin);
     }
 
+    // OAuth callbacks arrive as plain browser redirects with no Authorization header.
+    // Handle them before the handler chain so auth-gated handlers don't intercept them.
+    if (url.pathname === '/integrations/google/callback') {
+      return withCors(await handleIntegrations(request, env, url.pathname), origin);
+    }
+
     let response =
       (await handleAuth(request, env, url.pathname)) ??
       (await handleAdmin(request, env, url.pathname)) ??

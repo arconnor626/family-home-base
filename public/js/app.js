@@ -1027,15 +1027,45 @@ function renderGcalBanner(el, status) {
   const lastSync = status.lastSync
     ? new Date(status.lastSync).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : 'Never';
+  const calLabel = status.calendarSummary
+    ? `${status.calendarSummary}`
+    : (status.calendarId === 'primary' ? 'Primary calendar' : status.calendarId);
   el.innerHTML = `
     <div class="integration-status connected">
-      <span>✅ Google Calendar connected · Last sync: ${lastSync}</span>
-      <div style="display:flex;gap:8px">
+      <span>✅ Google Calendar connected
+        <span class="gcal-cal-name" id="gcal-cal-name" title="Click to change calendar" style="cursor:pointer;text-decoration:underline dotted;margin-left:4px">${calLabel}</span>
+        · Last sync: ${lastSync}
+      </span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="gcal-cal-select" class="filter-select hidden" style="font-size:0.8rem"></select>
         <button class="btn-primary btn-sm" id="gcal-sync-btn">Sync Now</button>
         <button class="btn-secondary btn-sm" id="gcal-disconnect-btn">Disconnect</button>
       </div>
     </div>`;
-  el.querySelector('#gcal-sync-btn').addEventListener('click', () => syncGoogleCal(el));
+
+  // Click calendar name → load picker
+  el.querySelector('#gcal-cal-name').addEventListener('click', async () => {
+    const sel = el.querySelector('#gcal-cal-select');
+    if (!sel.classList.contains('hidden')) { sel.classList.add('hidden'); return; }
+    sel.innerHTML = '<option>Loading…</option>';
+    sel.classList.remove('hidden');
+    const cals = await api('GET', '/integrations/google/calendars');
+    if (!Array.isArray(cals)) { sel.classList.add('hidden'); return; }
+    sel.innerHTML = cals.map(c =>
+      `<option value="${c.id}" ${c.id === status.calendarId ? 'selected' : ''}>${c.summary}${c.primary ? ' (primary)' : ''}</option>`
+    ).join('');
+    sel.onchange = () => {
+      const chosen = cals.find(c => c.id === sel.value);
+      el.querySelector('#gcal-cal-name').textContent = chosen?.summary ?? sel.value;
+      sel.classList.add('hidden');
+    };
+  });
+
+  el.querySelector('#gcal-sync-btn').addEventListener('click', () => {
+    const sel = el.querySelector('#gcal-cal-select');
+    const calendarId = sel.classList.contains('hidden') ? null : sel.value;
+    syncGoogleCal(el, calendarId);
+  });
   el.querySelector('#gcal-disconnect-btn').addEventListener('click', () => disconnectGoogleCal(el));
 }
 
@@ -1045,11 +1075,12 @@ async function connectGoogleCal() {
   if (data?.authUrl) window.location.href = data.authUrl;
 }
 
-async function syncGoogleCal(bannerEl) {
+async function syncGoogleCal(bannerEl, calendarId = null) {
   const btn = bannerEl.querySelector('#gcal-sync-btn');
   btn.disabled = true;
   btn.textContent = 'Syncing…';
-  const result = await api('POST', '/integrations/google/sync');
+  const body = calendarId ? { calendarId } : {};
+  const result = await api('POST', '/integrations/google/sync', body);
   if (result?.error) {
     alert(result.error);
     btn.disabled = false;

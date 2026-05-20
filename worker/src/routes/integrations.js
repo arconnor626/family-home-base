@@ -29,7 +29,8 @@ export async function handleIntegrations(request, env, pathname) {
 
   if (pathname === '/integrations/google/auth'       && method === 'GET')    return googleAuth(request, env, session);
   if (pathname === '/integrations/google/status'     && method === 'GET')    return googleStatus(env, session);
-  if (pathname === '/integrations/google/sync'       && method === 'POST')   return googleSync(env, session);
+  if (pathname === '/integrations/google/calendars'  && method === 'GET')    return googleListCalendars(env, session);
+  if (pathname === '/integrations/google/sync'       && method === 'POST')   return googleSync(request, env, session);
   if (pathname === '/integrations/google/disconnect' && method === 'DELETE') return googleDisconnect(env, session);
 
   return null;
@@ -111,7 +112,33 @@ async function googleStatus(env, session) {
   const raw = await env.FAMILY_HUB_KV.get(`integration:google:${session.userId}`);
   if (!raw) return Response.json({ connected: false });
   const { userId: _u, accessToken: _a, refreshToken: _r, tokenExpiry: _e, ...pub } = JSON.parse(raw);
-  return Response.json({ connected: true, ...pub });
+  return Response.json({ connected: true, calendarId: pub.calendarId ?? 'primary', ...pub });
+}
+
+// ── List user's calendars ─────────────────────────────────────────────────────
+
+async function googleListCalendars(env, session) {
+  const raw = await env.FAMILY_HUB_KV.get(`integration:google:${session.userId}`);
+  if (!raw) return Response.json({ error: 'Not connected' }, { status: 400 });
+  const integration = JSON.parse(raw);
+
+  let accessToken;
+  try { accessToken = await getValidToken(integration, env); }
+  catch { return Response.json({ error: 'Token refresh failed. Please reconnect.' }, { status: 401 }); }
+
+  const res = await fetch(`${GOOGLE_CAL_API}/users/me/calendarList`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return Response.json({ error: 'Failed to fetch calendars' }, { status: 502 });
+
+  const data = await res.json();
+  const calendars = (data.items ?? []).map(c => ({
+    id:      c.id,
+    summary: c.summary,
+    primary: c.primary ?? false,
+    color:   c.backgroundColor ?? null,
+  }));
+  return Response.json(calendars);
 }
 
 // ── Disconnect ────────────────────────────────────────────────────────────────
@@ -123,10 +150,14 @@ async function googleDisconnect(env, session) {
 
 // ── Sync ──────────────────────────────────────────────────────────────────────
 
-async function googleSync(env, session) {
+async function googleSync(request, env, session) {
   const raw = await env.FAMILY_HUB_KV.get(`integration:google:${session.userId}`);
   if (!raw) return Response.json({ error: 'Google Calendar not connected.' }, { status: 400 });
   const integration = JSON.parse(raw);
+
+  // Allow caller to switch the active calendar
+  const body = await request.json().catch(() => ({}));
+  if (body?.calendarId) integration.calendarId = body.calendarId;
 
   // Refresh token if needed
   let accessToken;
