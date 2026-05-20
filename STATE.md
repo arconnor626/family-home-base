@@ -28,7 +28,8 @@ secure backend and access control to it.
 
 ## Current phase
 
-**Phase 5 — COMPLETE.** Google Calendar OAuth2 sync and CSV transaction import are live.
+**Phase 5 — COMPLETE.** Google Calendar OAuth2 sync, CSV transaction import, and
+Teller bank account integration are all live.
 
 ## Deployed URLs
 
@@ -41,7 +42,7 @@ secure backend and access control to it.
 - Login page (`public/login.html`) — gates the entire site
 - Full app shell (`public/index.html`) — Dashboard, Schedule, Finance, Tasks, Projects, Admin
 - `public/js/app.js` — all sections + CRUD for all data types; lazy-load pattern; view picker
-- `public/css/style.css` — complete app styles including all Phase 4 components
+- `public/css/style.css` — complete app styles including all Phase 4/5 components
 - Worker auth routes: `POST /auth/login`, `POST /auth/logout`, `GET /auth/session`
 - `GET /users` — returns `[{ id, name }]` for all users (any authenticated user)
 - Worker schedule routes: `GET/POST /schedule/events`, `PUT/DELETE /schedule/events/:id`
@@ -53,9 +54,16 @@ secure backend and access control to it.
 - Worker task routes: `GET/POST /tasks`, `PUT/DELETE /tasks/:id`
 - Worker project routes: `GET/POST /projects`, `PUT/DELETE /projects/:id`
 - Worker note routes: `GET/POST /notes`, `DELETE /notes/:id`
-- Worker integration routes: `GET /integrations/google/auth`, `GET /integrations/google/callback`,
+- Worker integration routes (Google Calendar):
+  `GET /integrations/google/auth`, `GET /integrations/google/callback`,
   `GET /integrations/google/status`, `POST /integrations/google/sync`,
+  `PUT /integrations/google/calendars`, `GET /integrations/google/calendars`,
   `DELETE /integrations/google/disconnect`
+- Worker Teller routes (bank account integration):
+  `GET /integrations/teller/enrollments`,
+  `POST /integrations/teller/enroll`,
+  `POST /integrations/teller/sync`,
+  `DELETE /integrations/teller/enrollments/:id`
 - Worker admin routes (admin role only): `GET/POST /admin/users`,
   `PUT/DELETE /admin/users/:username`
 - PBKDF2 password hashing (100k iterations, SHA-256), 7-day KV-backed sessions
@@ -63,21 +71,44 @@ secure backend and access control to it.
 
 ## Exact next action
 
-Begin **Phase 6** — Records integration (document storage + AI/natural-language search).
-Read `PROJECT_PLAN.md` for scope. Re-read `DECISIONS.md` (especially D16) before starting.
+**Finance is the top priority.** The next focus is enhanced budget analysis and
+planning features:
+- Month-over-month spending comparison by category
+- Budget vs. actual trend charts / forecast
+- Monthly check-in workflow (review prior month, plan ahead)
 
-**One required setup step before Google Calendar sync will work:**
-Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` as Worker secrets:
-```
-npx wrangler secret put GOOGLE_CLIENT_ID
-npx wrangler secret put GOOGLE_CLIENT_SECRET
-```
-The redirect URI to register in Google Cloud Console:
-`https://connor-family-hub.arconnor626.workers.dev/integrations/google/callback`
+After that: Phase 6 — Records integration (document storage + AI/natural-language search).
+Read `PROJECT_PLAN.md` for scope. Re-read `DECISIONS.md` (especially D15, D16) before starting.
 
-To redeploy after changes:
-- **Worker:** `wrangler deploy` from `worker/`
-- **Frontend:** `wrangler pages deploy public/ --project-name connor-family-hub-v2` from repo root
+## Pending setup steps
+
+**Teller (bank integration):**
+- `TELLER_APP_ID` secret: ✅ set
+- `TELLER_CERT` mTLS binding: ✅ bound (certificate ID `92b69536-800c-4604-8822-736e5187342a`)
+- `TELLER_TOKEN_SIGNING_KEY` secret: ⏳ optional — add for Ed25519 enrollment verification:
+  ```
+  npx wrangler secret put TELLER_TOKEN_SIGNING_KEY
+  ```
+  Paste the Ed25519 public key from teller.io → Settings → Application.
+
+**Google Calendar:**
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`: add as Worker secrets if not done:
+  ```
+  npx wrangler secret put GOOGLE_CLIENT_ID
+  npx wrangler secret put GOOGLE_CLIENT_SECRET
+  ```
+  Register redirect URI in Google Cloud Console:
+  `https://connor-family-hub.arconnor626.workers.dev/integrations/google/callback`
+
+## Deploy commands
+
+```
+# Worker
+cd worker && npx wrangler deploy
+
+# Frontend
+npx wrangler pages deploy public/ --project-name connor-family-hub-v2 --commit-dirty=true
+```
 
 ## Environment note
 
