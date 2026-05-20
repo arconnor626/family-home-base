@@ -20,7 +20,15 @@ id = "33a7160b8d84400c87051ce1ebbaf75e"
 [dev]
 port = 8787
 
+# --- Teller mTLS certificate ------------------------------------------------
+# Uploaded with: wrangler mtls-certificate upload --cert certificate.pem --key private_key.pem --name teller-cert
+# List existing: wrangler mtls-certificate list
+[[mtls_certificates]]
+binding = "TELLER_CERT"
+certificate_id = "92b69536-800c-4604-8822-736e5187342a"
+
 # --- Notes ------------------------------------------------------------------
-# Secrets (e.g. a session-signing key, future OAuth credentials) are NOT stored
-# in this file. They are set with:  wrangler secret put <NAME>
-# This keeps them out of version control.
+# Secrets are NOT stored in this file. Set them with: wrangler secret put <NAME>
+# Required secrets:
+#   TELLER_APP_ID          — from teller.io/settings/application
+#   TELLER_TOKEN_SIGNING_KEY — Ed25519 public key from teller.io/settings/application

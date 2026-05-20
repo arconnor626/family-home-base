@@ -421,10 +421,161 @@ document.getElementById('event-save').addEventListener('click', async () => {
   closeModal('event-modal'); renderCalendar(); renderToday();
 });
 
+// ── TELLER BANK INTEGRATION ───────────────────────────────────────────────────
+
+const TELLER_APP_ID = 'app_pr6smqec79tq045oi0000';
+let tellerConnect   = null;
+let tellerEnrollments = [];
+
+function initTellerConnect() {
+  if (typeof TellerConnect === 'undefined') {
+    setTimeout(initTellerConnect, 300);
+    return;
+  }
+  tellerConnect = TellerConnect.setup({
+    applicationId: TELLER_APP_ID,
+    environment:   'development',
+    onSuccess:     handleTellerSuccess,
+    onExit:        () => {},
+  });
+}
+
+async function handleTellerSuccess(enrollment) {
+  // enrollment.accessToken + enrollment.enrollment from Teller Connect
+  document.getElementById('teller-connect-btn').disabled = true;
+  showToast('Bank connected! Importing accounts and transactions…');
+  const result = await api('POST', '/integrations/teller/enroll', {
+    accessToken: enrollment.accessToken,
+    enrollment:  enrollment.enrollment,
+  });
+  document.getElementById('teller-connect-btn').disabled = false;
+  if (result?.error) { alert('Failed to save bank connection: ' + (result.detail ?? result.error)); return; }
+  // Immediately sync the new enrollment
+  await syncTeller(result.id);
+}
+
+async function loadTellerPanel() {
+  const data = await api('GET', '/integrations/teller/enrollments');
+  tellerEnrollments = Array.isArray(data) ? data : [];
+  renderTellerPanel();
+  initTellerConnect();
+}
+
+function renderTellerPanel() {
+  const el      = document.getElementById('teller-enrollments-list');
+  const syncBtn = document.getElementById('teller-sync-all-btn');
+  const hint    = document.getElementById('teller-status-hint');
+
+  if (!tellerEnrollments.length) {
+    el.innerHTML = '<p class="empty-msg">No bank accounts connected. Click "+ Connect Bank" to link accounts via Teller.</p>';
+    syncBtn.classList.add('hidden');
+    hint.textContent = '';
+    return;
+  }
+
+  syncBtn.classList.remove('hidden');
+  const lastSyncs = tellerEnrollments.map(e => e.lastSync).filter(Boolean).sort();
+  hint.textContent = lastSyncs.length
+    ? 'Last sync: ' + new Date(lastSyncs.at(-1)).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : '';
+
+  el.innerHTML = tellerEnrollments.map(e => {
+    const accounts  = e.accounts ?? [];
+    const openAccts = accounts.filter(a => a.status === 'open');
+    return `
+      <div class="teller-enrollment-card">
+        <div class="teller-enrollment-header">
+          <div class="teller-institution-info">
+            <strong class="teller-institution-name">${e.institution?.name ?? 'Bank'}</strong>
+            <span class="field-hint">${openAccts.length} active account${openAccts.length !== 1 ? 's' : ''}${e.lastSync ? ' · synced ' + new Date(e.lastSync).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ' · never synced'}</span>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-secondary btn-sm teller-sync-one-btn" data-id="${e.id}">Sync</button>
+            <button class="btn-icon teller-remove-btn" data-id="${e.id}" title="Disconnect">×</button>
+          </div>
+        </div>
+        ${accounts.length ? `
+        <div class="teller-account-list">
+          ${accounts.map(a => `
+            <div class="teller-account-row">
+              <span class="teller-account-name">${a.name}${a.last_four ? ' ···' + a.last_four : ''}</span>
+              <span class="teller-account-meta">${a.type}${a.subtype ? ' · ' + a.subtype : ''}</span>
+              <span class="badge ${a.status === 'open' ? 'badge-success' : 'badge-muted'}">${a.status}</span>
+            </div>`).join('')}
+        </div>` : ''}
+      </div>`;
+  }).join('');
+
+  el.querySelectorAll('.teller-sync-one-btn').forEach(btn => {
+    btn.addEventListener('click', () => syncTeller(btn.dataset.id, btn));
+  });
+  el.querySelectorAll('.teller-remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => disconnectTeller(btn.dataset.id));
+  });
+}
+
+async function syncTeller(enrollmentId = null, triggerBtn = null) {
+  const syncAllBtn    = document.getElementById('teller-sync-all-btn');
+  const connectBtn    = document.getElementById('teller-connect-btn');
+  const originalLabel = triggerBtn?.textContent ?? 'Sync All';
+
+  syncAllBtn.disabled = true;
+  connectBtn.disabled = true;
+  if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = 'Syncing…'; }
+  else { syncAllBtn.textContent = 'Syncing…'; }
+
+  const body   = enrollmentId ? { enrollmentId } : {};
+  const result = await api('POST', '/integrations/teller/sync', body);
+
+  syncAllBtn.disabled = false;
+  syncAllBtn.textContent = 'Sync All';
+  connectBtn.disabled = false;
+  if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = originalLabel; }
+
+  if (result?.error) { alert('Sync failed: ' + result.error); return; }
+
+  showToast(
+    `Synced ${result.syncedAccounts} account${result.syncedAccounts !== 1 ? 's' : ''} ` +
+    `and ${result.syncedTransactions} transaction${result.syncedTransactions !== 1 ? 's' : ''}.`
+  );
+
+  // Reload finance data so new accounts/transactions appear
+  financeLoaded = false;
+  await ensureFinance();
+
+  // Refresh enrollment list to get updated lastSync timestamps
+  const data = await api('GET', '/integrations/teller/enrollments');
+  tellerEnrollments = Array.isArray(data) ? data : [];
+  renderTellerPanel();
+  renderAccounts();
+  renderTransactions();
+  await refreshSummary();
+}
+
+async function disconnectTeller(enrollmentId) {
+  const enrollment = tellerEnrollments.find(e => e.id === enrollmentId);
+  const name = enrollment?.institution?.name ?? 'this bank';
+  if (!confirm(`Disconnect ${name}? The enrollment will be removed. Existing account and transaction records will remain.`)) return;
+  const res = await api('DELETE', `/integrations/teller/enrollments/${enrollmentId}`);
+  if (res !== null && res?.error) { alert('Disconnect failed: ' + res.error); return; }
+  tellerEnrollments = tellerEnrollments.filter(e => e.id !== enrollmentId);
+  renderTellerPanel();
+}
+
+document.getElementById('teller-connect-btn').addEventListener('click', () => {
+  if (!tellerConnect) {
+    showToast('Teller Connect is still loading — please try again in a moment.');
+    return;
+  }
+  tellerConnect.open();
+});
+
+document.getElementById('teller-sync-all-btn').addEventListener('click', () => syncTeller());
+
 // ── FINANCE ───────────────────────────────────────────────────────────────────
 
 async function loadFinance() {
-  await ensureFinance();
+  await Promise.all([ensureFinance(), loadTellerPanel()]);
   const summary = await api('GET', '/finance/summary');
   lastSummary = summary;
   renderSummary(summary);

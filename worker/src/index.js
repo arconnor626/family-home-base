@@ -7,6 +7,7 @@ import { handleTasks } from './routes/tasks.js';
 import { handleProjects } from './routes/projects.js';
 import { handleNotes } from './routes/notes.js';
 import { handleIntegrations } from './routes/integrations.js';
+import { handleTeller } from './routes/teller.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -32,6 +33,7 @@ export default {
       (await handleTasks(request, env, url.pathname)) ??
       (await handleProjects(request, env, url.pathname)) ??
       (await handleNotes(request, env, url.pathname)) ??
+      (await handleTeller(request, env, url.pathname)) ??
       (await handleIntegrations(request, env, url.pathname)) ??
       new Response('Not Found', { status: 404 });
 
