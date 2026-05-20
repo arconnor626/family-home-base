@@ -1003,106 +1003,164 @@ document.getElementById('user-save').addEventListener('click', async () => {
 
 // ── GOOGLE CALENDAR INTEGRATION ───────────────────────────────────────────────
 
+let gcalStatus = null; // cached status
+let gcalAvailable = []; // cached list from Google
+
 async function loadGoogleCalStatus() {
-  const el = document.getElementById('gcal-banner');
-  try {
-    const status = await api('GET', '/integrations/google/status');
-    renderGcalBanner(el, status);
-  } catch {
-    el.classList.add('hidden');
-  }
+  gcalStatus = await api('GET', '/integrations/google/status');
+  renderGcalPanel();
 }
 
-function renderGcalBanner(el, status) {
-  el.classList.remove('hidden');
-  if (!status.connected) {
-    el.innerHTML = `
-      <div class="integration-status disconnected">
-        <span>📅 Connect Google Calendar to sync events automatically.</span>
-        <button class="btn-primary btn-sm" id="gcal-connect-btn">Connect Google Calendar</button>
-      </div>`;
-    el.querySelector('#gcal-connect-btn').addEventListener('click', connectGoogleCal);
+function renderGcalPanel() {
+  const panel = document.getElementById('gcal-panel');
+  panel.classList.remove('hidden');
+
+  const connected = gcalStatus?.connected;
+  document.getElementById('gcal-connect-btn').classList.toggle('hidden', !!connected);
+  document.getElementById('gcal-sync-btn').classList.toggle('hidden', !connected);
+  document.getElementById('gcal-add-btn').classList.toggle('hidden', !connected);
+  document.getElementById('gcal-disconnect-btn').classList.toggle('hidden', !connected);
+
+  const lastSyncEl = document.getElementById('gcal-last-sync');
+  if (connected && gcalStatus.lastSync) {
+    lastSyncEl.textContent = 'Last sync: ' + new Date(gcalStatus.lastSync)
+      .toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  } else {
+    lastSyncEl.textContent = connected ? 'Not yet synced' : '';
+  }
+
+  renderGcalCalList();
+}
+
+function renderGcalCalList() {
+  const el = document.getElementById('gcal-cal-list');
+  if (!gcalStatus?.connected) {
+    el.innerHTML = '<p class="empty-msg" style="padding:6px 0">Connect your Google account to start syncing calendars.</p>';
     return;
   }
-  const lastSync = status.lastSync
-    ? new Date(status.lastSync).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-    : 'Never';
-  const calLabel = status.calendarSummary
-    ? `${status.calendarSummary}`
-    : (status.calendarId === 'primary' ? 'Primary calendar' : status.calendarId);
-  el.innerHTML = `
-    <div class="integration-status connected">
-      <span>✅ Google Calendar connected
-        <span class="gcal-cal-name" id="gcal-cal-name" title="Click to change calendar" style="cursor:pointer;text-decoration:underline dotted;margin-left:4px">${calLabel}</span>
-        · Last sync: ${lastSync}
-      </span>
-      <div style="display:flex;gap:8px;align-items:center">
-        <select id="gcal-cal-select" class="filter-select hidden" style="font-size:0.8rem"></select>
-        <button class="btn-primary btn-sm" id="gcal-sync-btn">Sync Now</button>
-        <button class="btn-secondary btn-sm" id="gcal-disconnect-btn">Disconnect</button>
-      </div>
-    </div>`;
+  const cals = gcalStatus.syncedCalendars ?? [];
+  if (!cals.length) {
+    el.innerHTML = '<p class="empty-msg" style="padding:6px 0">No calendars added yet. Click "+ Add Calendar" to add one.</p>';
+    return;
+  }
+  el.innerHTML = cals.map((c, i) => {
+    const assignee = c.ownerId
+      ? (userList.find(u => u.id === c.ownerId)?.name ?? c.ownerId)
+      : 'Family (everyone)';
+    return `
+      <div class="gcal-cal-row">
+        <span class="gcal-cal-dot"></span>
+        <span class="gcal-cal-name">${c.summary}</span>
+        <span class="gcal-cal-assignee">→ ${assignee}</span>
+        <button class="btn-icon gcal-remove-btn" data-index="${i}" title="Remove">×</button>
+      </div>`;
+  }).join('');
 
-  // Click calendar name → load picker
-  el.querySelector('#gcal-cal-name').addEventListener('click', async () => {
-    const sel = el.querySelector('#gcal-cal-select');
-    if (!sel.classList.contains('hidden')) { sel.classList.add('hidden'); return; }
-    sel.innerHTML = '<option>Loading…</option>';
-    sel.classList.remove('hidden');
-    const cals = await api('GET', '/integrations/google/calendars');
-    if (!Array.isArray(cals)) { sel.classList.add('hidden'); return; }
-    sel.innerHTML = cals.map(c =>
-      `<option value="${c.id}" ${c.id === status.calendarId ? 'selected' : ''}>${c.summary}${c.primary ? ' (primary)' : ''}</option>`
-    ).join('');
-    sel.onchange = () => {
-      const chosen = cals.find(c => c.id === sel.value);
-      el.querySelector('#gcal-cal-name').textContent = chosen?.summary ?? sel.value;
-      sel.classList.add('hidden');
-    };
+  el.querySelectorAll('.gcal-remove-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.index, 10);
+      const newList = [...(gcalStatus.syncedCalendars ?? [])];
+      newList.splice(idx, 1);
+      await api('PUT', '/integrations/google/calendars', { calendars: newList });
+      gcalStatus.syncedCalendars = newList;
+      renderGcalCalList();
+    });
   });
-
-  el.querySelector('#gcal-sync-btn').addEventListener('click', () => {
-    const sel = el.querySelector('#gcal-cal-select');
-    const calendarId = sel.classList.contains('hidden') ? null : sel.value;
-    syncGoogleCal(el, calendarId);
-  });
-  el.querySelector('#gcal-disconnect-btn').addEventListener('click', () => disconnectGoogleCal(el));
 }
 
-async function connectGoogleCal() {
+// Connect button
+document.getElementById('gcal-connect-btn').addEventListener('click', async () => {
   const data = await api('GET', '/integrations/google/auth');
   if (data?.error) { alert(data.error); return; }
   if (data?.authUrl) window.location.href = data.authUrl;
-}
+});
 
-async function syncGoogleCal(bannerEl, calendarId = null) {
-  const btn = bannerEl.querySelector('#gcal-sync-btn');
+// Sync All button
+document.getElementById('gcal-sync-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('gcal-sync-btn');
   btn.disabled = true;
   btn.textContent = 'Syncing…';
-  const body = calendarId ? { calendarId } : {};
-  const result = await api('POST', '/integrations/google/sync', body);
-  if (result?.error) {
-    alert(result.error);
-    btn.disabled = false;
-    btn.textContent = 'Sync Now';
-    return;
-  }
-  // Reload events from server so the calendar reflects synced data
+  const result = await api('POST', '/integrations/google/sync');
+  btn.disabled = false;
+  btn.textContent = 'Sync All';
+  if (result?.error) { alert(result.error); return; }
   eventsLoaded = false;
   await ensureEvents();
   renderCalendar();
   renderToday();
-  // Refresh the banner to show updated lastSync time
-  const status = await api('GET', '/integrations/google/status');
-  renderGcalBanner(bannerEl, status);
-  showToast(`Synced ${result.synced} event${result.synced !== 1 ? 's' : ''} from Google Calendar.`);
-}
+  gcalStatus = await api('GET', '/integrations/google/status');
+  renderGcalPanel();
+  showToast(`Synced ${result.synced} event${result.synced !== 1 ? 's' : ''} from ${result.calendars} calendar${result.calendars !== 1 ? 's' : ''}.`);
+});
 
-async function disconnectGoogleCal(bannerEl) {
-  if (!confirm('Disconnect Google Calendar? Synced events will remain but no new syncs will occur.')) return;
+// Disconnect button
+document.getElementById('gcal-disconnect-btn').addEventListener('click', async () => {
+  if (!confirm('Disconnect Google Calendar? This will remove all synced events.')) return;
   await api('DELETE', '/integrations/google/disconnect');
-  renderGcalBanner(bannerEl, { connected: false });
-}
+  gcalStatus = { connected: false };
+  eventsLoaded = false;
+  await ensureEvents();
+  renderCalendar();
+  renderToday();
+  renderGcalPanel();
+});
+
+// + Add Calendar button → show inline form
+document.getElementById('gcal-add-btn').addEventListener('click', async () => {
+  const form = document.getElementById('gcal-add-form');
+  form.classList.remove('hidden');
+  document.getElementById('gcal-add-btn').classList.add('hidden');
+
+  // Load available calendars from Google if not cached
+  if (!gcalAvailable.length) {
+    const availSel = document.getElementById('gcal-available-select');
+    availSel.innerHTML = '<option>Loading…</option>';
+    gcalAvailable = await api('GET', '/integrations/google/calendars');
+    if (!Array.isArray(gcalAvailable)) gcalAvailable = [];
+  }
+
+  const alreadyAdded = new Set((gcalStatus?.syncedCalendars ?? []).map(c => c.id));
+  const availSel = document.getElementById('gcal-available-select');
+  availSel.innerHTML = gcalAvailable
+    .filter(c => !alreadyAdded.has(c.id))
+    .map(c => `<option value="${c.id}" data-summary="${c.summary}">${c.summary}${c.primary ? ' (primary)' : ''}</option>`)
+    .join('');
+  if (!availSel.options.length) {
+    availSel.innerHTML = '<option disabled>All calendars already added</option>';
+  }
+
+  // Populate assign-to selector
+  const assignSel = document.getElementById('gcal-assign-select');
+  assignSel.innerHTML =
+    '<option value="">Family (everyone)</option>' +
+    userList.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+});
+
+document.getElementById('gcal-add-cancel-btn').addEventListener('click', () => {
+  document.getElementById('gcal-add-form').classList.add('hidden');
+  document.getElementById('gcal-add-btn').classList.remove('hidden');
+});
+
+document.getElementById('gcal-add-confirm-btn').addEventListener('click', async () => {
+  const availSel  = document.getElementById('gcal-available-select');
+  const assignSel = document.getElementById('gcal-assign-select');
+  const calId     = availSel.value;
+  const summary   = availSel.options[availSel.selectedIndex]?.dataset.summary ?? calId;
+  const ownerId   = assignSel.value || null;
+  if (!calId) return;
+
+  const newList = [
+    ...(gcalStatus.syncedCalendars ?? []),
+    { id: calId, summary, ownerId },
+  ];
+  await api('PUT', '/integrations/google/calendars', { calendars: newList });
+  gcalStatus.syncedCalendars = newList;
+  gcalAvailable = []; // clear cache so it reloads next time
+
+  document.getElementById('gcal-add-form').classList.add('hidden');
+  document.getElementById('gcal-add-btn').classList.remove('hidden');
+  renderGcalCalList();
+});
 
 // ── CSV TRANSACTION IMPORT ────────────────────────────────────────────────────
 

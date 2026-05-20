@@ -88,8 +88,28 @@
           <button class="btn-primary btn-sm" id="add-event-btn">+ Add Event</button>
         </div>
       </div>
-      <!-- Google Calendar connection banner -->
-      <div id="gcal-banner" class="integration-banner hidden"></div>
+      <!-- Google Calendar management panel -->
+      <div id="gcal-panel" class="finance-panel hidden" style="margin-bottom:20px">
+        <div class="panel-header">
+          <h3>Google Calendar</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="gcal-last-sync" class="field-hint"></span>
+            <button class="btn-primary btn-sm hidden" id="gcal-sync-btn">Sync All</button>
+            <button class="btn-secondary btn-sm hidden" id="gcal-add-btn">+ Add Calendar</button>
+            <button class="btn-secondary btn-sm hidden" id="gcal-disconnect-btn">Disconnect</button>
+            <button class="btn-primary btn-sm hidden" id="gcal-connect-btn">Connect Google Calendar</button>
+          </div>
+        </div>
+        <!-- List of synced calendars -->
+        <div id="gcal-cal-list"></div>
+        <!-- Inline add-calendar form (hidden until + Add clicked) -->
+        <div id="gcal-add-form" class="gcal-add-form hidden">
+          <select id="gcal-available-select" class="filter-select" style="flex:1"></select>
+          <select id="gcal-assign-select" class="filter-select"></select>
+          <button class="btn-primary btn-sm" id="gcal-add-confirm-btn">Add</button>
+          <button class="btn-secondary btn-sm" id="gcal-add-cancel-btn">Cancel</button>
+        </div>
+      </div>
       <div class="calendar-grid" id="calendar-grid"></div>
       <div class="today-panel">
         <h3>Today's Events</h3>
