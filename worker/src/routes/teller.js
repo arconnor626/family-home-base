@@ -12,7 +12,9 @@
  * KV keys:
  *   teller:enrollment:<userId>:<enrollmentId>  — enrollment record (institution, access token)
  *
- * Teller API uses mTLS — the TELLER_CERT binding is used on every fetch.
+ * Teller API uses mTLS. Because cf.mtlsClientCert does not work for non-Cloudflare-proxied
+ * origins on workers.dev, we use node:https (nodejs_compat flag) with the cert and key
+ * stored as Worker secrets: TELLER_CERT_PEM and TELLER_KEY_PEM.
  */
 
 import { requireAuth, unauthorized, badRequest } from '../lib/guard.js';
@@ -37,15 +39,46 @@ export async function handleTeller(request, env, pathname) {
   return null;
 }
 
-// ── Teller API helper (mTLS) ──────────────────────────────────────────────────
+// ── Teller API helper (via Railway relay) ─────────────────────────────────────
+//
+// Cloudflare Workers cannot make outbound mTLS requests to arbitrary
+// third-party APIs — cf.mtlsClientCert and node:https cert/key options
+// are both unsupported for non-Cloudflare-proxied origins.
+//
+// Instead we forward requests to a tiny Node.js relay deployed on Railway
+// (family-home-base/teller-proxy/) which handles the mTLS handshake.
+//
+// Required Worker secrets:
+//   TELLER_PROXY_URL    — e.g. https://teller-proxy-xxxx.up.railway.app
+//   TELLER_PROXY_SECRET — shared secret matching the relay's PROXY_SECRET env var
 
-async function tellerFetch(env, accessToken, path) {
-  const credentials = btoa(`${accessToken}:`);
-  return fetch(`${TELLER_API}${path}`, {
-    headers: { Authorization: `Basic ${credentials}` },
-    // @ts-ignore — Cloudflare Workers mTLS binding
-    cf: { mtlsClientCert: env.TELLER_CERT },
+async function tellerFetch(env, accessToken, path, method = 'GET') {
+  const proxyUrl    = env.TELLER_PROXY_URL;
+  const proxySecret = env.TELLER_PROXY_SECRET;
+
+  if (!proxyUrl || !proxySecret) {
+    throw new Error(
+      'TELLER_PROXY_URL and TELLER_PROXY_SECRET Worker secrets are required. ' +
+      'Deploy teller-proxy/ on Railway, then set these secrets with wrangler secret put.'
+    );
+  }
+
+  const res = await fetch(`${proxyUrl}/relay`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${proxySecret}`,
+      'Content-Type':  'application/json',
+    },
+    body: JSON.stringify({ path, accessToken, method }),
   });
+
+  return {
+    ok:     res.ok,
+    status: res.status,
+    statusText: res.statusText,
+    json:   () => res.json(),
+    text:   () => res.text(),
+  };
 }
 
 // ── List enrollments ──────────────────────────────────────────────────────────
@@ -78,8 +111,11 @@ async function enroll(request, env, session) {
   // Fetch institution details + initial accounts from Teller
   const accountsRes = await tellerFetch(env, accessToken, '/accounts');
   if (!accountsRes.ok) {
-    const err = await accountsRes.json().catch(() => ({}));
-    return Response.json({ error: 'Teller API error fetching accounts', detail: err }, { status: 502 });
+    const errText = await accountsRes.text().catch(() => '');
+    let errJson = {};
+    try { errJson = JSON.parse(errText); } catch (_) {}
+    console.error(`[teller] /accounts failed: ${accountsRes.status} ${accountsRes.statusText}`, errText);
+    return Response.json({ error: 'Teller API error fetching accounts', detail: errJson, status: accountsRes.status }, { status: 502 });
   }
   const tellerAccounts = await accountsRes.json();
 

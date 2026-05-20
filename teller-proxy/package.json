@@ -1,0 +1,13 @@
+{
+  "name": "teller-proxy",
+  "version": "1.0.0",
+  "description": "mTLS relay for Teller API — deployed on Railway",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
